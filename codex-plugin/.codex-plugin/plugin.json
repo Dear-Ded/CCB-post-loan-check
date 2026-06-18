@@ -1,0 +1,26 @@
+{
+  "name": "post-loan-portal-check",
+  "version": "0.1.0+codex.20260618084540",
+  "description": "\u81ea\u52a8\u67e5\u8be2 CCB \u8d37\u524d/\u8d37\u540e\u5916\u90e8\u4fe1\u606f\u95e8\u6237\u3001\u622a\u56fe\u5e76\u751f\u6210 Word \u62a5\u544a\u3002",
+  "author": {
+    "name": "Local"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CCB\u8d37\u524d\u8d37\u540e\u67e5\u8be2",
+    "shortDescription": "\u6309\u4f01\u4e1a\u540d\u67e5\u8be2\u56fa\u5b9a\u95e8\u6237\u5e76\u751f\u6210\u622a\u56fe Word",
+    "longDescription": "\u8f93\u5165\u4f01\u4e1a\u540d\u79f0\u540e\uff0c\u81ea\u52a8\u67e5\u8be2\u6cb3\u5357\u5e94\u6025\u3001\u751f\u6001\u73af\u5883\u3001\u5e02\u573a\u76d1\u7ba1\u3001\u88c1\u5224\u6587\u4e66\u3001\u6267\u884c\u516c\u5f00\u7f51\u548c\u767e\u5ea6\u524d\u4e09\u9875\uff0c\u6309\u6a21\u677f\u6c47\u603b\u622a\u56fe\u751f\u6210 CCB \u8d37\u524d\u8d37\u540e\u67e5\u8be2\u62a5\u544a\u3002",
+    "developerName": "Local",
+    "category": "Productivity",
+    "capabilities": [
+      "Browser automation",
+      "Screenshots",
+      "Documents"
+    ],
+    "defaultPrompt": [
+      "\u7ed9\u8fd9\u5bb6\u4f01\u4e1a\u505a CCB \u8d37\u524d\u8d37\u540e\u67e5\u8be2",
+      "\u67e5\u8be2\u4f01\u4e1a\u5916\u90e8\u4fe1\u606f\u5e76\u751f\u6210 Word",
+      "\u540c\u6b65\u67e5\u8be2\u6cd5\u4eba\u88ab\u6267\u884c\u4fe1\u606f"
+    ]
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "id": "post-loan-portal-check",
+  "displayName": "贷后门户查询",
+  "description": "输入企业名称后，自动查询固定外部门户、截取完整结果页，并按模板生成 Word 报告。",
+  "audience": "nonTechnical",
+  "inputs": [
+    {
+      "name": "companyName",
+      "label": "企业名称",
+      "type": "text",
+      "required": true
+    },
+    {
+      "name": "orgCode",
+      "label": "统一社会信用代码/组织机构代码",
+      "type": "text",
+      "required": false,
+      "help": "不填时自动查询，只有查不到或不确定时才提示补充。"
+    },
+    {
+      "name": "includeHealthCommission",
+      "label": "是否医院/医疗机构",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "includePersons",
+      "label": "是否同步查询法人/实控人被执行信息",
+      "type": "boolean",
+      "default": false
+    },
+    {
+      "name": "persons",
+      "label": "个人查询名单",
+      "type": "array",
+      "requiredWhen": "includePersons=true",
+      "itemFields": [
+        { "name": "name", "label": "姓名", "type": "text", "required": true },
+        { "name": "idNumber", "label": "身份证号", "type": "text", "required": true }
+      ]
+    }
+  ],
+  "startupNotice": [
+    "我会打开浏览器并预填查询信息。",
+    "请登录中国裁判文书网。",
+    "请在每个中国执行信息公开网页面只输入验证码。",
+    "完成后不用回到聊天窗口，我会自动继续生成报告。"
+  ],
+  "commandTemplate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{skillRoot}\\scripts\\run_post_loan_check.ps1\" -CompanyName \"{companyName}\" {orgCodeArg} {personArgs} {healthArg} -TemplateSlots",
+  "preflightCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{skillRoot}\\scripts\\preflight_workbuddy.ps1\" -Json",
+  "outputPattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",
+  "rules": {
+    "personalSearchScope": "execution-only",
+    "captchaBypass": false,
+    "dynamicScreenshotCount": true,
+    "rejectInvalidScreenshots": true,
+    "startupOnlyUserInteraction": true
+  }
+}

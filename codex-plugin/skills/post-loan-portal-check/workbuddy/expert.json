@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "0.1",
+  "id": "post-loan-portal-check",
+  "displayName": "贷后门户查询",
+  "description": "输入企业名称后，自动查询固定外部门户、截取完整结果页，并按模板生成 Word 报告。",
+  "audience": "nonTechnical",
+  "entrypoint": "run_workbuddy.ps1",
+  "preflight": "preflight_workbuddy.ps1",
+  "form": {
+    "fields": [
+      {
+        "name": "companyName",
+        "label": "企业名称",
+        "type": "text",
+        "required": true,
+        "placeholder": "例如：濮阳豫能综合能源有限公司"
+      },
+      {
+        "name": "orgCode",
+        "label": "统一社会信用代码/组织机构代码",
+        "type": "text",
+        "required": false,
+        "placeholder": "不知道可以不填"
+      },
+      {
+        "name": "includeHealthCommission",
+        "label": "医院/医疗机构",
+        "type": "boolean",
+        "default": false
+      },
+      {
+        "name": "includePersons",
+        "label": "同步查询法人/实控人被执行信息",
+        "type": "boolean",
+        "default": false
+      },
+      {
+        "name": "persons",
+        "label": "法人/实控人",
+        "type": "array",
+        "visibleWhen": "includePersons=true",
+        "itemFields": [
+          { "name": "name", "label": "姓名", "type": "text", "required": true },
+          { "name": "idNumber", "label": "身份证号", "type": "text", "required": true }
+        ]
+      }
+    ]
+  },
+  "startupNotice": {
+    "title": "开始前只需要你做这一次",
+    "items": [
+      "我会打开浏览器并把能填的信息都填好。",
+      "请登录中国裁判文书网。",
+      "请在每个中国执行信息公开网页面只输入验证码。",
+      "完成后不用回到聊天窗口，我会自动继续并生成报告。"
+    ]
+  },
+  "runtimePolicy": {
+    "preferBackground": true,
+    "foregroundOnlyFor": ["court-login", "captcha"],
+    "persistentBrowserProfile": true,
+    "rejectInvalidScreenshots": true,
+    "dynamicScreenshotCount": true,
+    "captchaBypass": false
+  },
+  "outputs": {
+    "defaultRoot": "D:\\项目文件\\中建黄河大桥贷后\\outputs",
+    "filePattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",
+    "openFolderOnComplete": true
+  }
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: "CCB贷前贷后查询"
+  short_description: "按企业名自动查贷前/贷后门户并生成截图 Word"
+  default_prompt: "使用 $post-loan-portal-check 对企业做 CCB 贷前贷后查询：启动时一次性提醒我登录裁判文书网、处理执行公开网登录/验证码，并询问是否同步查法人/实控人被执行信息；之后自动完成门户搜索、完整截图和 Word 报告。"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,59 @@
+{
+  "defaultOutputRoot": "D:\\项目文件\\中建黄河大桥贷后\\outputs",
+  "templateDocx": "assets/贷后查询模板.docx",
+  "targets": [
+    {
+      "id": "henan_emergency",
+      "name": "河南省应急管理厅",
+      "officialUrl": "https://yjglt.henan.gov.cn/",
+      "officialDomain": "yjglt.henan.gov.cn",
+      "strategy": "portal-or-site-search"
+    },
+    {
+      "id": "henan_ecology",
+      "name": "河南省生态环境厅",
+      "officialUrl": "https://sthjt.henan.gov.cn/",
+      "officialDomain": "sthjt.henan.gov.cn",
+      "strategy": "portal-or-site-search"
+    },
+    {
+      "id": "henan_market",
+      "name": "河南省市场监督管理局",
+      "officialUrl": "https://scjg.henan.gov.cn/",
+      "officialDomain": "scjg.henan.gov.cn",
+      "strategy": "portal-or-site-search"
+    },
+    {
+      "id": "wenshu",
+      "name": "中国裁判文书网",
+      "officialUrl": "https://wenshu.court.gov.cn/",
+      "officialDomain": "wenshu.court.gov.cn",
+      "strategy": "manual-judicial"
+    },
+    {
+      "id": "zhixing",
+      "name": "中国执行信息公开网",
+      "officialUrl": "https://zxgk.court.gov.cn/",
+      "officialDomain": "zxgk.court.gov.cn",
+      "strategy": "manual-judicial"
+    },
+    {
+      "id": "baidu_page_1",
+      "name": "百度搜索第1页",
+      "strategy": "baidu-page",
+      "page": 1
+    },
+    {
+      "id": "baidu_page_2",
+      "name": "百度搜索第2页",
+      "strategy": "baidu-page",
+      "page": 2
+    },
+    {
+      "id": "baidu_page_3",
+      "name": "百度搜索第3页",
+      "strategy": "baidu-page",
+      "page": 3
+    }
+  ]
+}

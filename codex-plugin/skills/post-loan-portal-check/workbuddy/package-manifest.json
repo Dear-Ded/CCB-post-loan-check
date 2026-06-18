@@ -1,0 +1,35 @@
+{
+  "id": "post-loan-portal-check",
+  "name": "贷后门户查询",
+  "version": "0.1.0",
+  "entrypoint": "workbuddy/run_workbuddy.ps1",
+  "preflight": "scripts/preflight_workbuddy.ps1",
+  "expertConfig": "workbuddy/expert.json",
+  "requiredFiles": [
+    "SKILL.md",
+    "agents/openai.yaml",
+    "assets/贷后查询模板.docx",
+    "scripts/run_post_loan_check.ps1",
+    "scripts/capture_template_slots.js",
+    "scripts/build_report.py",
+    "scripts/preflight_workbuddy.ps1",
+    "references/sites.json",
+    "references/workbuddy-adapter.md",
+    "references/workbuddy-expert.json",
+    "workbuddy/expert.json",
+    "workbuddy/run_workbuddy.ps1"
+  ],
+  "userInteraction": {
+    "startupOnly": true,
+    "requiredActions": [
+      "登录中国裁判文书网",
+      "输入中国执行信息公开网验证码",
+      "如同步查询个人，被执行查询页按人分别输入验证码"
+    ]
+  },
+  "knownLimits": [
+    "不绕过验证码或登录。",
+    "司法和搜索引擎站点可能触发风控，需要用户在启动阶段完成验证。",
+    "企业代码自动查询受搜索结果和安全验证影响；不确定时要求用户在启动阶段补充。"
+  ]
+}

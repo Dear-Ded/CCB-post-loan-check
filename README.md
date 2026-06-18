@@ -42,6 +42,22 @@ flowchart LR
 | WorkBuddy | skill、专家、专家团 | `workbuddy/run_workbuddy.ps1` | JSON + Word / reports |
 | 豆包办公任务 | 浏览器/云端电脑任务 | `packages/doubao/office-task.md` | Word / reports |
 
+## 对话加载
+
+公开仓库地址：
+
+```text
+https://github.com/Dear-Ded/CCB-
+```
+
+可以直接把这个 URL 发给支持 GitHub 抓取的平台，让它读取项目并运行对应入口：
+
+- Codex：读取 `packages/core-skill/SKILL.md` 或 `codex-plugin/skills/post-loan-portal-check`。
+- WorkBuddy：导入 `packages/core-skill/workbuddy/package-manifest.json`。
+- 豆包办公任务：读取 `packages/doubao/office-task.md`；PC 本地可调用 `packages/doubao/run_doubao_local.ps1`。
+
+更详细的发现与加载说明见 [PLATFORM_DISCOVERY.md](PLATFORM_DISCOVERY.md)。
+
 ## 查询范围
 
 - 河南省应急管理厅

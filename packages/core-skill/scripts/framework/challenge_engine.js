@@ -151,12 +151,17 @@ function readRiskConsent(file, audit) {
   }
 }
 
+function enterprisePrivateProfile() {
+  return String(process.env.POST_LOAN_DEPLOYMENT_PROFILE || "").toLowerCase() === "enterprise-private";
+}
+
 class ChallengeEngine {
   constructor({
     audit,
     policyFile = process.env.POST_LOAN_CHALLENGE_POLICY,
     allowLowRiskOcr = envFlag("POST_LOAN_ENABLE_LOW_RISK_OCR", true),
     riskConsentFile = process.env.POST_LOAN_RISK_CONSENT_FILE || defaultRiskConsentFile(),
+    deploymentProfile = process.env.POST_LOAN_DEPLOYMENT_PROFILE || "",
     pythonExe = process.env.POST_LOAN_PYTHON_EXE || "python",
     ocrHelperPath,
     ocrSolver
@@ -167,6 +172,7 @@ class ChallengeEngine {
     this.policyOverrides = loadPolicyFile(policyFile, audit);
     this.riskConsentFile = riskConsentFile;
     this.riskConsent = readRiskConsent(riskConsentFile, audit);
+    this.deploymentProfile = deploymentProfile;
     this.ocrSolver = ocrSolver || new OcrSolver({
       pythonExe,
       helperPath: ocrHelperPath,
@@ -186,7 +192,15 @@ class ChallengeEngine {
     };
     const byType = this.policyOverrides[sourceType] || {};
     const byId = sourceId ? (this.policyOverrides[sourceId] || {}) : {};
-    const policy = mergePolicy(mergePolicy(base, byType), byId);
+    const enterpriseAutoDefaults = enterprisePrivateProfile() && this.riskConsent.accepted && (base.risk === SourceRisk.HIGH || base.risk === SourceRisk.STANDARD);
+    const enterpriseOverride = enterpriseAutoDefaults ? {
+      mode: ChallengeMode.AUTO,
+      allowOcr: true,
+      allowSessionReuse: true,
+      allowAssisted: true,
+      enterpriseDefaultAuto: true
+    } : {};
+    const policy = mergePolicy(mergePolicy(mergePolicy(base, enterpriseOverride), byType), byId);
     const warning = riskWarningFor(base, policy, sourceType, sourceId);
     const acknowledged = overrideConfirmed(policy) || (warning && this.riskConsent.accepted);
     return {
@@ -263,7 +277,9 @@ class ChallengeEngine {
       userOverride: decision.policy.userOverride,
       riskAcknowledged: decision.policy.riskAcknowledged,
       riskAcknowledgementSource: decision.policy.riskAcknowledgementSource,
-      riskWarning: decision.policy.riskWarning
+      riskWarning: decision.policy.riskWarning,
+      deploymentProfile: this.deploymentProfile,
+      enterpriseDefaultAuto: Boolean(decision.policy.enterpriseDefaultAuto)
     });
     return { ...snapshot, decision };
   }

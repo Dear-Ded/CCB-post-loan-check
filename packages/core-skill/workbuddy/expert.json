@@ -63,7 +63,8 @@
       "dynamicScreenshotCount": true,
       "normalPublicSourcesDefaultAuto": true,
       "lowRiskOcrDefaultEnabled": true,
-      "highRiskAutoRequiresFirstUseConsent": true
+      "highRiskAutoRequiresFirstUseConsent": true,
+      "enterprisePrivateProfileSupported": true
     },
   "outputs": {
     "defaultRoot": "%USERPROFILE%\\Documents\\CCB贷前贷后查询\\outputs",

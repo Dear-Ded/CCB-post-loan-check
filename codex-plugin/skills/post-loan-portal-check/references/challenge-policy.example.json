@@ -1,5 +1,6 @@
 {
   "_comment": "Product defaults: normal public/authorized/internal sources use auto; judicial/government strong-risk sources use assisted; abnormal/prohibited sources use blocked. Advanced users may override any source type or source id. If changing a safer default to auto, set riskAcknowledged=true after confirming authorization, compliance, and account-risk acceptance.",
+  "_enterprisePrivate": "Set POST_LOAN_DEPLOYMENT_PROFILE=enterprise-private and complete global risk consent to make all source classes default to auto. Then override any source down to assisted or blocked here.",
   "public": {
     "mode": "auto",
     "risk": "low",

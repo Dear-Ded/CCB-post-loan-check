@@ -155,6 +155,17 @@ $env:POST_LOAN_CHALLENGE_POLICY = ".\packages\core-skill\references\challenge-po
 
 企业托管部署也可设置 `POST_LOAN_HIGH_RISK_AUTO_ACK=1` 或指定 `POST_LOAN_RISK_CONSENT_FILE`，用于集中化确认和审计。
 
+### 企业私有化部署模式
+
+如果产品部署在企业自有服务器，由企业管理员、法务和安全团队负责合规策略，可以启用企业私有化档位：
+
+```powershell
+$env:POST_LOAN_DEPLOYMENT_PROFILE = "enterprise-private"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\core-skill\scripts\confirm_challenge_risk.ps1 -Accept -EnterprisePrivate
+```
+
+该档位下，管理员完成一次全局确认后，所有来源默认进入 `auto`，包括司法/政务强风控源；企业可以再通过策略文件把任意来源降级为 `assisted` 或 `blocked`。所有决策继续写入 audit。
+
 ## 质量规则
 
 - 不把登录页、验证码页、异常页、空白页作为结果页。

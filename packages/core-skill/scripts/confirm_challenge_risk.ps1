@@ -1,6 +1,7 @@
 param(
   [switch]$Accept,
   [switch]$Revoke,
+  [switch]$EnterprisePrivate,
   [string]$ConsentFile = ""
 )
 
@@ -17,7 +18,8 @@ $warning = @"
 高风险验证码自动处理确认
 
 普通公开、授权、内部数据源默认自动处理。
-司法、政务、强风控站点默认托管处理；企业或高级用户可通过策略文件改为自动处理。
+司法、政务、强风控站点在普通桌面模式下默认托管处理。
+企业私有化部署可启用 enterprise-private 档位：管理员全局确认后，所有来源默认进入自动模式，再由企业按源关闭。
 
 这是一次全局确认，不是逐个数据源确认。如果你选择允许高风险来源按策略文件进入自动处理，请先确认：
 1. 你对相关数据源拥有合法授权或使用权限；
@@ -50,6 +52,7 @@ $payload = [ordered]@{
   acceptedAt = (Get-Date).ToUniversalTime().ToString("o")
   acceptedBy = $env:USERNAME
   scope = "global"
+  deploymentProfile = if ($EnterprisePrivate) { "enterprise-private" } else { "default" }
   warning = "User accepted responsibility for high-risk source auto handling configuration when enabled by policy."
 }
 $payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $ConsentFile -Encoding UTF8

@@ -104,7 +104,8 @@
         "blocked -> auto"
       ],
       "riskAcknowledgement": "当用户把更安全的默认档位提升为 auto 时，可在策略中写入 riskAcknowledged=true，或完成一次全局风险确认；否则系统降级为托管或阻断并写入 audit。",
-      "responsibility": "高级用户调整策略前应确认授权、合规要求和账号风险。"
+      "responsibility": "高级用户调整策略前应确认授权、合规要求和账号风险。",
+      "enterprisePrivateProfile": "POST_LOAN_DEPLOYMENT_PROFILE=enterprise-private 且完成全局风险确认后，所有来源默认 auto；企业可按源降级为 assisted 或 blocked。"
     }
   },
   "platforms": {

@@ -104,6 +104,8 @@
 
 三档策略是系统默认值，不是硬编码限制。默认值面向大多数用户体验：普通公开/授权/内部数据源为 `auto`，司法/政务强风控为 `assisted`，异常风控和明确禁止为 `blocked`。高级用户可以通过 `POST_LOAN_CHALLENGE_POLICY` 指向 JSON 策略文件，按数据源类型或具体数据源 ID 覆盖处理档位。
 
+企业私有化部署可使用 `POST_LOAN_DEPLOYMENT_PROFILE=enterprise-private`。在管理员完成全局风险确认后，该档位把所有来源默认切到 `auto`，企业再按自己的合规策略把特定来源降级为 `assisted` 或 `blocked`。
+
 示例：
 
 ```json

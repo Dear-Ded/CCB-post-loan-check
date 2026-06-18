@@ -33,7 +33,7 @@
   },
   "outputContract": {
     "singleReportName": "贷后查询-{companyName}-{yyyyMMdd}.docx",
-    "batchFolderName": "batch-post-loan-{yyyyMMdd-HHmm}",
+    "batchFolderName": "batch-post-loan-{yyyyMMdd-HHmmss}",
     "reportsFolder": "reports",
     "evidenceFolder": "evidence",
     "summaryFile": "batch-summary.json"

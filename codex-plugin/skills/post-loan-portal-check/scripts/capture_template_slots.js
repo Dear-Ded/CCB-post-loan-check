@@ -159,31 +159,37 @@ function isUsefulPortalCapture(result, company) {
   return text.includes(company) || !result.requireSubjectMatch;
 }
 
-async function tryCapturePortalCandidates(page, shots, name, candidates, audit, company, add) {
+async function tryCapturePortalCandidates(pageOrContext, shots, name, candidates, audit, company, add) {
   const startedCount = shots.length;
   const attempts = [];
+  const context = typeof pageOrContext.newPage === "function" ? pageOrContext : null;
   for (const candidate of candidates) {
+    const page = context ? await context.newPage() : pageOrContext;
     const file = candidate.file || add(candidate.name || name);
     const beforeCount = shots.length;
-    const result = await tryCapturePortal(page, shots, candidate.name || name, file, candidate.url, candidate.scrollY || 0, candidate.options || {});
-    const shot = shots[shots.length - 1];
-    result.shot = shots.length > beforeCount ? shot : null;
-    result.requireSubjectMatch = Boolean(candidate.requireSubjectMatch);
-    attempts.push({
-      label: candidate.name || name,
-      url: candidate.url,
-      ok: result.ok,
-      validationOk: result.shot?.validation?.ok,
-      subjectMatched: result.shot ? String(result.shot.text || "").includes(company) : false,
-      error: result.error || ""
-    });
-    if (isUsefulPortalCapture(result, company)) {
-      audit?.record("portal_candidate_selected", { name, company, attempts });
-      return result;
-    }
-    if (shots.length > beforeCount) {
-      shots.splice(beforeCount, shots.length - beforeCount);
-      try { fs.unlinkSync(file); } catch {}
+    try {
+      const result = await tryCapturePortal(page, shots, candidate.name || name, file, candidate.url, candidate.scrollY || 0, candidate.options || {});
+      const shot = shots[shots.length - 1];
+      result.shot = shots.length > beforeCount ? shot : null;
+      result.requireSubjectMatch = Boolean(candidate.requireSubjectMatch);
+      attempts.push({
+        label: candidate.name || name,
+        url: candidate.url,
+        ok: result.ok,
+        validationOk: result.shot?.validation?.ok,
+        subjectMatched: result.shot ? String(result.shot.text || "").includes(company) : false,
+        error: result.error || ""
+      });
+      if (isUsefulPortalCapture(result, company)) {
+        audit?.record("portal_candidate_selected", { name, company, attempts });
+        return result;
+      }
+      if (shots.length > beforeCount) {
+        shots.splice(beforeCount, shots.length - beforeCount);
+        try { fs.unlinkSync(file); } catch {}
+      }
+    } finally {
+      if (context) await page.close().catch(() => {});
     }
   }
   audit?.record("portal_candidates_failed", { name, company, attempts });
@@ -683,8 +689,8 @@ async function main() {
     portalQueue.add({
       id: "portal-health-local-or-provincial",
       sourceId: "henan_health",
-      run: async () => withPortalPage((portalPage) => tryCapturePortalCandidates(
-        portalPage,
+      run: async () => tryCapturePortalCandidates(
+        context,
         shots,
         "河南省卫生健康委员会",
         [
@@ -712,7 +718,7 @@ async function main() {
         audit,
         company,
         add
-      ))
+      )
     });
   }
   await portalQueue.runAll();

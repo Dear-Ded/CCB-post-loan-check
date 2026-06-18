@@ -96,15 +96,27 @@ try {
   }
 
   $outputRootPath = if ($OutputRoot) { $OutputRoot } else { $preflightResult.outputRoot.path }
-  $report = Get-ChildItem -LiteralPath $outputRootPath -Recurse -Filter "*.docx" |
-    Where-Object { $_.LastWriteTime -ge $before } |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
-
-  $batchReports = Get-ChildItem -LiteralPath $outputRootPath -Recurse -Directory -Filter "reports" |
-    Where-Object { $_.LastWriteTime -ge $before } |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
+  $batchReports = $null
+  $report = $null
+  if ($isBatch) {
+    $batchRoot = Get-ChildItem -LiteralPath $outputRootPath -Directory -Filter "batch-post-loan-*" |
+      Where-Object { $_.LastWriteTime -ge $before } |
+      Sort-Object LastWriteTime -Descending |
+      Select-Object -First 1
+    if ($batchRoot) {
+      $candidate = Join-Path $batchRoot.FullName "reports"
+      if (Test-Path -LiteralPath $candidate) { $batchReports = Get-Item -LiteralPath $candidate }
+    }
+  } else {
+    $report = Get-ChildItem -LiteralPath $outputRootPath -Recurse -Filter "*.docx" |
+      Where-Object {
+        $_.LastWriteTime -ge $before -and
+        $_.DirectoryName -notmatch "\\batch-post-loan-[^\\]+\\reports$" -and
+        $_.FullName -notmatch "\\batch-post-loan-[^\\]+\\evidence\\"
+      } |
+      Sort-Object LastWriteTime -Descending |
+      Select-Object -First 1
+  }
 
   if ($batchReports) {
     Write-Result $true "Batch reports generated." "" $batchReports.FullName

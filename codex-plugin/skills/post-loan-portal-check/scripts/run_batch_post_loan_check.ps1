@@ -53,7 +53,7 @@ foreach ($item in $OrgCode) {
 
 $summary = [System.Collections.Generic.List[object]]::new()
 $effectiveHeadless = $Headless -or ($SkipJudicial -and $NoPrompt)
-$stamp = Get-Date -Format "yyyyMMdd-HHmm"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $batchRoot = Join-Path $OutputRoot ("batch-post-loan-{0}" -f $stamp)
 
 if ($RetryFailed) {

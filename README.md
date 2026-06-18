@@ -87,6 +87,25 @@ $env:POST_LOAN_OUTPUT_ROOT = "D:\reports"
 
 也可以参考 `.env.example`。
 
+## 挑战处理能力
+
+项目内置挑战处理引擎，目标是达到企业级 RPA/数据接入框架的产品形态：
+
+- 统一识别登录页、验证码页、人机验证页、频控页、安全网关和空白异常页。
+- 低风险授权场景可开启 OCR 自动处理。
+- 司法、政务、强风控门户默认托管处理，系统填主体，用户完成登录/验证码，系统继续跑。
+- 禁止或异常风险场景自动阻断、冷却和审计。
+- 所有挑战处理决策写入 audit，避免黑盒行为。
+
+低风险 OCR 默认关闭，可按合规场景开启：
+
+```powershell
+$env:POST_LOAN_ENABLE_LOW_RISK_OCR = "1"
+$env:POST_LOAN_CHALLENGE_POLICY = ".\packages\core-skill\references\challenge-policy.example.json"
+```
+
+更完整的调研与路线见 `CHALLENGE_ENGINE_RESEARCH.md`。
+
 ## 质量规则
 
 - 不把登录页、验证码页、异常页、空白页作为结果页。

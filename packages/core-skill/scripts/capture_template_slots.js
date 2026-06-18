@@ -8,6 +8,7 @@ const { SessionManager } = require("./framework/session_manager");
 const { TaskQueue } = require("./framework/task_queue");
 const { SourceStateStore } = require("./framework/source_state_store");
 const { ChallengeMode } = require("./framework/challenge_policy");
+const { ChallengeEngine } = require("./framework/challenge_engine");
 const { JudicialSourcePolicy } = require("./framework/judicial_sources");
 const {
   attachEnforcementResponseAudit,
@@ -588,6 +589,11 @@ async function main() {
   fs.mkdirSync(profile, { recursive: true });
   const sourceStateStore = new SourceStateStore({ file: path.join(persistentProfile, "source-state.json"), audit });
   const judicialPolicy = new JudicialSourcePolicy({ mode: judicialMode, audit });
+  const challengeEngine = new ChallengeEngine({
+    audit,
+    pythonExe: process.env.POST_LOAN_PYTHON_EXE || "python",
+    ocrHelperPath: path.join(__dirname, "optional_ddddocr.py")
+  });
   const previousSession = sessionManager.readState(profileScope);
   audit.record("browser_profile_selected", { scope: profileScope, profile, persistentProfile, hasPreviousSession: Boolean(previousSession) });
   const context = await chromium.launchPersistentContext(profile, {
@@ -764,7 +770,8 @@ async function main() {
     const searchManager = new SearchManager({
       audit,
       cooldownMs: Number(args["search-cooldown-ms"] || 8 * 60 * 1000),
-      stateStore: sourceStateStore
+      stateStore: sourceStateStore,
+      challengeEngine
     });
     await searchManager.capture({
       page,

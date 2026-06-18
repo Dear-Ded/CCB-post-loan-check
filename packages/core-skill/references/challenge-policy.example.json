@@ -1,0 +1,31 @@
+{
+  "public-low-risk": {
+    "mode": "auto",
+    "risk": "low",
+    "allowOcr": true,
+    "allowSessionReuse": true,
+    "allowAssisted": true
+  },
+  "authorized": {
+    "mode": "auto",
+    "risk": "low",
+    "allowOcr": true,
+    "allowSessionReuse": true,
+    "allowAssisted": true
+  },
+  "search-engine": {
+    "mode": "blocked",
+    "risk": "standard",
+    "allowOcr": false,
+    "allowSessionReuse": false,
+    "allowAssisted": false,
+    "cooldownOnChallenge": true
+  },
+  "judicial": {
+    "mode": "assisted",
+    "risk": "high",
+    "allowOcr": false,
+    "allowSessionReuse": true,
+    "allowAssisted": true
+  }
+}

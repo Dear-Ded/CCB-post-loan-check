@@ -69,6 +69,30 @@
     "医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切省级。",
     "批量查询最终只向用户展示 reports 文件夹，截图和审计留在 evidence。"
   ],
+  "challengeHandling": {
+    "defaultPosture": "safe-by-default",
+    "tiers": [
+      {
+        "name": "auto",
+        "scope": "内部系统、授权系统、低风险公开源",
+        "capabilities": ["登录态复用", "低风险 OCR", "自动填充提交", "自动重试", "结果校验"]
+      },
+      {
+        "name": "assisted",
+        "scope": "司法门户、政务门户、强风控站点",
+        "capabilities": ["自动打开页面", "自动填写主体", "用户完成登录或验证码", "系统继续执行", "审计留痕"]
+      },
+      {
+        "name": "blocked",
+        "scope": "明确禁止自动化、异常风控、账号风险",
+        "capabilities": ["阻断当前源", "记录失败原因", "冷却熔断", "继续批量其他任务"]
+      }
+    ],
+    "switches": {
+      "POST_LOAN_ENABLE_LOW_RISK_OCR": "低风险 OCR 总开关，默认关闭。",
+      "POST_LOAN_CHALLENGE_POLICY": "来源分级和挑战处理策略文件。"
+    }
+  },
   "platforms": {
     "codex": {
       "mode": "local-plugin-skill",

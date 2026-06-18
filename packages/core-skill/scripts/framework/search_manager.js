@@ -1,5 +1,5 @@
 const { CircuitBreaker, ChallengeKind } = require("./challenge_policy");
-const { detectPageChallenge } = require("./challenge_detector");
+const { ChallengeEngine } = require("./challenge_engine");
 const { SourceStateStore } = require("./source_state_store");
 
 const SEARCH_ENGINES = [
@@ -53,11 +53,12 @@ function cooldownForChallenge(kind, baseMs) {
 }
 
 class SearchManager {
-  constructor({ audit, cooldownMs = 8 * 60 * 1000, stateStore } = {}) {
+  constructor({ audit, cooldownMs = 8 * 60 * 1000, stateStore, challengeEngine } = {}) {
     this.audit = audit;
     this.cooldownMs = cooldownMs;
     this.breaker = new CircuitBreaker({ cooldownMs, threshold: 1 });
     this.stateStore = stateStore || new SourceStateStore({ audit });
+    this.challengeEngine = challengeEngine || new ChallengeEngine({ audit });
   }
 
   async capture({ page, company, captureCompleteScroll, add }) {
@@ -93,7 +94,12 @@ class SearchManager {
             break;
           }
 
-          const snapshot = await detectPageChallenge(searchPage);
+          const snapshot = await this.challengeEngine.inspectPage(searchPage, {
+            sourceId,
+            sourceType: "search-engine",
+            sourceName: engine.name,
+            mode: "blocked"
+          });
           const text = snapshot.text;
           const challenge = snapshot.challenge;
           if (challenge.kind !== "none") {
@@ -130,7 +136,12 @@ class SearchManager {
             await searchPage.goto(item.url, { waitUntil: "domcontentloaded", timeout: 15000 });
             await searchPage.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
             await searchPage.waitForTimeout(600);
-            const snapshot = await detectPageChallenge(searchPage);
+            const snapshot = await this.challengeEngine.inspectPage(searchPage, {
+              sourceId,
+              sourceType: "search-engine",
+              sourceName: engine.name,
+              mode: "blocked"
+            });
             if (snapshot.challenge.kind !== "none" || !engine.validUrl(searchPage.url())) {
               blocked = true;
               this.audit?.record("search_capture_aborted_after_recheck", {

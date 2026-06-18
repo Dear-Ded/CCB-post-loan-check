@@ -10,6 +10,8 @@ https://github.com/Dear-Ded/CCB-
 
 平台是否能“只通过对话自动加载”，取决于该平台是否支持从 GitHub URL、公开仓库、skill 包或办公任务说明中导入工具。
 
+跨平台统一原则：易搜索、易加载、一句话触发、输出质量稳定可靠。任何平台加载后，都应先读取 `LOAD_THIS_PROJECT.md` 和 `packages/core-skill/references/platform-contract.json`，再选择自己的入口。
+
 ## Codex
 
 可用方式：
@@ -44,11 +46,18 @@ https://github.com/Dear-Ded/CCB-
 
 - PC 本地任务：调用 `packages/doubao/run_doubao_local.ps1`。
 - 云端电脑/远程浏览器任务：读取 `packages/doubao/office-task.md` 和 `packages/doubao/task-mode.json`，在任务工作区复刻同一输出契约。
+- 豆包 App 手机端：新办公任务模式如支持 skill/任务执行，直接读取 `packages/doubao/SKILL.md` 和 `packages/doubao/mobile-task.md`，在 Ubuntu 环境运行 `packages/doubao/run_doubao_app.sh` 并输出 Word、`reports` 或下载链接；不支持时调用 `packages/doubao/run_doubao_mobile.ps1` 交给后台 worker。
 
 推荐对话：
 
 ```text
 打开并读取 https://github.com/Dear-Ded/CCB-，按 packages/doubao/office-task.md 的要求执行 CCB贷前贷后查询，最终交付 Word 或 reports 文件夹。
+```
+
+豆包 App 推荐对话：
+
+```text
+帮我加载 https://github.com/Dear-Ded/CCB- 这个项目，按豆包 App 手机端任务说明执行 CCB贷前贷后查询。企业名是 XXX，最后把 Word 或 reports 下载链接发给我。
 ```
 
 ## 搜索关键词

@@ -2,10 +2,26 @@
   "id": "ccb-pre-post-loan-query-doubao",
   "displayName": "CCB贷前贷后查询",
   "mode": "browser-task",
-  "targetEnvironments": ["pc-local-browser", "web-remote-browser", "mobile-supervised-task"],
+  "targetEnvironments": ["pc-local-browser", "web-remote-browser", "mobile-supervised-task", "doubao-app-office-task-skill"],
   "localEntrypoint": "run_doubao_local.ps1",
+  "mobileEntrypoint": "run_doubao_mobile.ps1",
+  "doubaoAppEntrypoint": "run_doubao_app.sh",
+  "doubaoAppPreflight": "preflight_doubao_app.sh",
+  "runtimeLimits": {
+    "os": "Ubuntu 22.04.3 LTS x86_64",
+    "foregroundSeconds": 120,
+    "backgroundSeconds": 600,
+    "processMemoryGB": 2,
+    "diskGB": 50,
+    "singleFileMB": 500,
+    "noRoot": true,
+    "noListeningService": true,
+    "noDocker": true,
+    "noGpu": true
+  },
   "startupNotice": [
     "用户只需要输入企业名；批量时可粘贴多个企业名。",
+    "豆包 App 办公任务模式可直接调 skill 时优先直接执行；不支持时再交给云端或 PC worker。",
     "无需司法门户时尽量后台执行，不打扰用户。",
     "如果任务包含裁判文书网或执行信息公开网，请只在需要登录或验证码时请求用户接管。",
     "验证码错误或页面没有进入查询结果/无结果时，不截图，继续等待有效结果。"

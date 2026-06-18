@@ -1,0 +1,28 @@
+{
+  "name": "ccb-pre-post-loan-query",
+  "version": "0.1.0",
+  "private": false,
+  "description": "CCB贷前贷后查询: cross-platform enterprise post-loan portal checks with screenshots and Word reports.",
+  "type": "commonjs",
+  "scripts": {
+    "preflight:doubao": "bash packages/doubao/preflight_doubao_app.sh",
+    "check:js": "node --check packages/core-skill/scripts/capture_template_slots.js",
+    "check:bash": "bash -n packages/doubao/run_doubao_app.sh && bash -n packages/doubao/preflight_doubao_app.sh"
+  },
+  "dependencies": {
+    "playwright": "^1.61.0"
+  },
+  "keywords": [
+    "CCB贷前贷后查询",
+    "贷后查询",
+    "post-loan",
+    "pre-loan",
+    "word-report",
+    "doubao",
+    "workbuddy",
+    "codex",
+    "browser-automation"
+  ],
+  "license": "MIT"
+}
+

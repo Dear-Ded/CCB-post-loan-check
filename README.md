@@ -9,6 +9,8 @@
 
 用户只需要输入企业名或批量企业名单。系统负责打开公开或授权访问的数据源、填写主体、处理挑战策略、校验结果页、截图留痕，并按统一模板生成 Word 报告。批量任务会把最终 Word 统一归集到 `reports` 文件夹，截图和审计材料留在 `evidence`。
 
+跨平台产品原则：易搜索、易加载、一句话触发、输出质量稳定可靠。平台适配时优先读取 [LOAD_THIS_PROJECT.md](LOAD_THIS_PROJECT.md) 和 [platform-contract.json](packages/core-skill/references/platform-contract.json)。
+
 ## 核心体验
 
 - 小白用户：输入企业名，拿 Word。
@@ -41,6 +43,7 @@ flowchart LR
 | Codex | 本地 skill/plugin | `run-post-loan-check.ps1` / `run-batch-post-loan-check.ps1` | Word / reports |
 | WorkBuddy | skill、专家、专家团 | `workbuddy/run_workbuddy.ps1` | JSON + Word / reports |
 | 豆包办公任务 | 浏览器/云端电脑任务 | `packages/doubao/office-task.md` | Word / reports |
+| 豆包 App | Ubuntu 办公任务模式直接执行；不支持时后台交接 | `packages/doubao/run_doubao_app.sh` / `packages/doubao/mobile-task.md` | Word / reports / 下载链接 |
 
 ## 对话加载
 
@@ -55,6 +58,7 @@ https://github.com/Dear-Ded/CCB-
 - Codex：读取 `packages/core-skill/SKILL.md` 或 `codex-plugin/skills/post-loan-portal-check`。
 - WorkBuddy：导入 `packages/core-skill/workbuddy/package-manifest.json`。
 - 豆包办公任务：读取 `packages/doubao/office-task.md`；PC 本地可调用 `packages/doubao/run_doubao_local.ps1`。
+- 豆包 App：读取 `packages/doubao/SKILL.md` 和 `packages/doubao/mobile-task.md`；Ubuntu 办公任务模式下运行 `packages/doubao/run_doubao_app.sh`，结果以 Word、`reports` 或下载链接返回。
 
 更详细的发现与加载说明见 [PLATFORM_DISCOVERY.md](PLATFORM_DISCOVERY.md)。
 
@@ -70,6 +74,14 @@ https://github.com/Dear-Ded/CCB-
 - 可选法人/实控人被执行信息查询：必须由用户提供姓名和身份证号
 
 ## 快速开始
+
+Linux / 豆包 App 办公任务预检：
+
+```bash
+npm install
+python3 -m pip install -r requirements.txt --user
+bash packages/doubao/preflight_doubao_app.sh
+```
 
 单家企业：
 
@@ -176,6 +188,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\test-output-cont
 - Codex 单家和批量入口
 - WorkBuddy 单家 JSON 和批量 JSON 入口
 - 豆包 PC 本地任务单家和批量入口
+- 豆包 App 手机端交接入口
 - Word 文件存在且非空
 - manifest 存在且包含截图
 - 批量 `reports`、`evidence`、`batch-summary.json` 完整
@@ -186,6 +199,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\test-output-cont
 - [挑战处理引擎调研](CHALLENGE_ENGINE_RESEARCH.md)
 - [通用数据源接入框架产品架构方案](通用数据源接入框架产品架构方案.md)
 - [豆包办公任务说明](packages/doubao/office-task.md)
+- [豆包 App 手机端任务说明](packages/doubao/mobile-task.md)
+- [豆包 App 办公任务运行环境适配](packages/doubao/doubao-app-runtime.md)
 
 ## 合规边界
 

@@ -1,0 +1,26 @@
+{
+  "id": "ccb-post-loan-doubao-mobile-handoff",
+  "channel": "doubao-app",
+  "entrySurface": "mobile-app",
+  "executionSurface": "doubao-office-task-or-cloud-or-pc-worker",
+  "preferredExecution": "doubao-app-office-task-skill",
+  "fallbackExecution": "cloud-or-pc-worker",
+  "inputContract": {
+    "minFields": ["companyName"],
+    "optionalFields": ["orgCode", "batchList", "includeHealthCommission"]
+  },
+  "resultContract": {
+    "singleReportName": "贷后查询-{companyName}-{yyyyMMdd}.docx",
+    "batchFolderName": "batch-post-loan-{yyyyMMdd-HHmmss}-{pid}",
+    "reportsFolder": "reports",
+    "evidenceFolder": "evidence",
+    "deliveryModes": ["download", "share-link", "cloud-disk"]
+  },
+  "handoffRules": [
+    "豆包 App 办公任务模式能调用 skill 时，优先直接执行并输出结果。",
+    "当前端能力不足时，手机端发起任务，云端或 PC worker 执行。",
+    "后台 worker 必须保持与 PC/web 端一致的输出合同。",
+    "批量任务只向用户暴露 reports，evidence 留作审计。",
+    "遇到登录或验证码时才请求用户接管。"
+  ]
+}

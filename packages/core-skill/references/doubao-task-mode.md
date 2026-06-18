@@ -6,7 +6,7 @@
 
 - PC 客户端场景下，任务可操作本地浏览器。
 - Web 端场景下，任务可操作远程虚拟浏览器。
-- 手机端用户也可以发起任务，由云端/远程环境完成网页操作。
+- 手机端用户也可以通过豆包 App 新办公任务模式直接调 skill 执行；当前端能力不足时，再由云端/远程环境完成网页操作。
 
 这意味着适配重点不是本机 PowerShell，而是把流程描述成稳定的浏览器任务状态机。
 
@@ -39,6 +39,7 @@
 ## Public References
 
 - Doubao privacy policy: https://www.doubao.com/legal/privacy
+- Doubao mobile download page: https://www.doubao.com/download/mobile
 - Doubao browser extension landing page: https://www.doubao.com/browser-extension/landing
 
 The adapter treats task-mode browser sessions as user-supervised browser automation. User login, cookie persistence, and security verification remain under user control.

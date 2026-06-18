@@ -9,6 +9,8 @@ Doubao task mode should run the workflow as a browser-state task:
 - On PC clients, use the local Doubao browser session when available.
 - On Web clients, use the remote virtual browser session.
 - On mobile, let the user start and supervise the task while browser execution happens in the task environment.
+- For batch tasks, keep the user-facing output to the `reports` folder and keep screenshots/audit evidence under `evidence`.
+- Do not assume local Windows paths exist in a remote task environment; use the packaged scripts when available, otherwise reproduce the same browser workflow and output contract.
 
 ## User Handoff
 
@@ -30,3 +32,4 @@ At the beginning of the task, tell the user:
 6. If captcha fails or no result state appears, stay on the page and wait for new captcha input.
 7. Capture only confirmed result/no-result pages.
 8. Generate the Word report.
+9. For batch tasks, collect all Word files into `reports` and keep per-company evidence under `evidence`.

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1.0",
+  "productName": "CCB贷前贷后查询",
+  "inputContract": {
+    "single": {
+      "companyName": {
+        "type": "string",
+        "required": true,
+        "description": "企业名称。用户只会输入这个也必须能启动。"
+      },
+      "orgCode": {
+        "type": "string",
+        "required": false,
+        "description": "统一社会信用代码/组织机构代码。不填时系统尽力自动查询；不确定时才提示补充。"
+      },
+      "legalRepresentativeName": {
+        "type": "string",
+        "required": false,
+        "description": "法人姓名。只有用户要求同步个人被执行信息时使用。"
+      },
+      "actualControllerName": {
+        "type": "string",
+        "required": false,
+        "description": "实控人姓名。只有用户要求同步个人被执行信息时使用。"
+      },
+      "personIdNumbers": {
+        "type": "array",
+        "required": false,
+        "description": "个人被执行查询需要身份证号；平台不得臆造。"
+      },
+      "includeHealthCommission": {
+        "type": "boolean",
+        "default": "auto",
+        "description": "医院/医疗机构自动开启；其他主体默认关闭。"
+      }
+    },
+    "batch": {
+      "companies": {
+        "type": "array",
+        "required": true,
+        "description": "企业名称列表。支持用户粘贴中文顿号、逗号、换行分隔的名单。"
+      },
+      "orgCodes": {
+        "type": "array",
+        "required": false,
+        "description": "与企业列表同顺序对应；缺失项允许为空。"
+      }
+    }
+  },
+  "outputContract": {
+    "singleReportName": "贷后查询-{companyName}-{yyyyMMdd}.docx",
+    "batchFolderName": "batch-post-loan-{yyyyMMdd-HHmm}",
+    "batchReportsFolder": "reports",
+    "batchEvidenceFolder": "evidence",
+    "summaryFile": "batch-summary.json",
+    "mustContain": [
+      "Word报告",
+      "截图证据",
+      "查询URL",
+      "查询时间",
+      "结果页校验状态",
+      "失败原因审计"
+    ]
+  },
+  "qualityRules": [
+    "不能把登录页、验证码页、异常页、空白页作为结果页。",
+    "执行公开网必须确认结果/无结果状态后才截图。",
+    "搜索引擎必须同一搜索源前三页完整可用才输出，不输出半截搜索证据。",
+    "医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切省级。",
+    "批量查询最终只向用户展示 reports 文件夹，截图和审计留在 evidence。"
+  ],
+  "platforms": {
+    "codex": {
+      "mode": "local-plugin-skill",
+      "singleEntrypoint": "scripts/run_post_loan_check.ps1",
+      "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1"
+    },
+    "workbuddy": {
+      "mode": "skill-expert-expert-group",
+      "singleEntrypoint": "workbuddy/run_workbuddy.ps1",
+      "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1"
+    },
+    "doubao": {
+      "mode": "office-task-browser-agent",
+      "singleEntrypoint": "task-mode prompt + packaged scripts",
+      "batchEntrypoint": "task-mode batch prompt + packaged scripts"
+    }
+  }
+}

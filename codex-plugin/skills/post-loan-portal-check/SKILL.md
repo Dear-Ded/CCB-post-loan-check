@@ -27,7 +27,7 @@ Before running the command, determine `-OrgCode`. If it was not given, search th
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File C:\Users\80983\.codex\skills\post-loan-portal-check\scripts\run_post_loan_check.ps1 `
+  -File .\run-post-loan-check.ps1 `
   -CompanyName "企业名称" `
   -OrgCode "统一社会信用代码或组织机构代码" `
   -TemplateSlots
@@ -45,6 +45,28 @@ Optional hospital/medical portal:
 -IncludeHealthCommission
 ```
 
+Batch command:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass `
+  -File .\run-batch-post-loan-check.ps1 `
+  -CompanyName "企业A","企业B" `
+  -OrgCode "企业A统一社会信用代码","企业B统一社会信用代码" `
+  -TemplateSlots `
+  -SkipJudicial
+```
+
+Batch output uses one folder with `reports` for final Word files and `evidence` for per-company screenshots, manifests, and audit logs.
+Batch retry:
+
+- `run_batch_post_loan_check.ps1 -RetryFailed` reuses the latest previous `batch-summary.json` under the same output root and reruns only failed companies.
+
+Background behavior:
+
+- When `-SkipJudicial -NoPrompt` is used with template slots, the runner automatically uses background/headless mode.
+- `-Headless` can still be supplied explicitly.
+- Judicial assisted mode keeps a visible browser because login and captcha may require user action.
+
 ## Required Content Standards
 
 - Henan portals must be search result pages, not home pages with a filled search box.
@@ -54,14 +76,29 @@ Optional hospital/medical portal:
 - Person checks only query execution information on China Enforcement Information. Do not query personal judgments, Baidu, or other portals for people.
 - Person execution checks must capture the full no-result page if empty. If records exist, open each detail page and capture all visible information.
 - Baidu must capture the first three result pages completely. The number of screenshots is dynamic; if one page needs more than two viewport screenshots, continue scrolling and capture every segment needed for complete visible coverage.
+- Search evidence must be complete for the same engine. If page 2 or page 3 triggers login, captcha, rate limit, or an invalid page, do not keep partial page 1 screenshots in the final report.
 - Hospital/medical entities must include an additional Henan Health Commission portal search screenshot.
+- For hospital/medical entities, prefer the local health commission site when it returns a useful page; if the local site is unavailable or does not provide a useful subject result, fall back to the provincial health commission site.
 - Do not bypass captchas or access controls.
 
 ## Output
 
 Default output root:
 
-`D:\项目文件\中建黄河大桥贷后\outputs`
+`%USERPROFILE%\Documents\CCB贷前贷后查询\outputs`
+
+Override with:
+
+```powershell
+$env:POST_LOAN_OUTPUT_ROOT = "D:\your-output-folder"
+```
+
+Runtime overrides:
+
+- `POST_LOAN_NODE_EXE`
+- `POST_LOAN_PYTHON_EXE`
+- `POST_LOAN_NODE_MODULES`
+- `POST_LOAN_CHROME_EXE`
 
 Final report name:
 

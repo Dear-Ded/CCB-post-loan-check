@@ -4,11 +4,10 @@
   "mode": "browser-task",
   "targetEnvironments": ["pc-local-browser", "web-remote-browser", "mobile-supervised-task"],
   "startupNotice": [
-    "我会打开所有需要你注意的页面。",
-    "请登录中国裁判文书网。",
-    "中国执行信息公开网可能需要登录，并且经常加载失败，重试是正常情况。",
-    "请在每个执行公开网页面只输入验证码。",
-    "验证码错误或页面没有进入查询结果/无结果时，我不会截图，会继续等你重新输入。"
+    "用户只需要输入企业名；批量时可粘贴多个企业名。",
+    "无需司法门户时尽量后台执行，不打扰用户。",
+    "如果任务包含裁判文书网或执行信息公开网，请只在需要登录或验证码时请求用户接管。",
+    "验证码错误或页面没有进入查询结果/无结果时，不截图，继续等待有效结果。"
   ],
   "stateMachine": [
     "collect_subject",
@@ -20,13 +19,24 @@
     "validate_result_state",
     "retry_on_captcha_or_load_failure",
     "capture_confirmed_pages",
-    "build_report"
+    "build_report",
+    "collect_batch_reports"
   ],
   "validationRules": {
     "enforcementMustReachResultState": true,
     "rejectLoginCaptchaErrorBlankPages": true,
     "dynamicScreenshots": true,
+    "completeSearchEvidenceOnly": true,
+    "batchReportsFolder": "reports",
+    "batchEvidenceFolder": "evidence",
     "captchaBypass": false
+  },
+  "outputContract": {
+    "singleReportName": "贷后查询-{companyName}-{yyyyMMdd}.docx",
+    "batchFolderName": "batch-post-loan-{yyyyMMdd-HHmm}",
+    "reportsFolder": "reports",
+    "evidenceFolder": "evidence",
+    "summaryFile": "batch-summary.json"
   },
   "optionalOcr": {
     "provider": "ddddocr",

@@ -1,12 +1,14 @@
 # CCB贷前贷后查询
 
-面向桌面 Agent 的企业贷前/贷后外部信息查询工具。输入企业名称后，自动查询固定公开门户，截取完整结果页，并按 Word 模板生成报告。
+面向 Codex、WorkBuddy、豆包办公任务的贷前/贷后外部信息查询工具。用户可以只输入企业名或一批企业名，系统负责打开公开或授权访问的数据源、填写主体、校验结果页、截图留痕，并按统一模板生成 Word 报告。
 
-## 当前适配目标
+默认体验目标很简单：用户拿到的是 Word 报告或批量 `reports` 文件夹，不需要理解浏览器自动化、Node、Python、验证码、截图目录这些技术细节。
 
-- Codex：本地插件 + skill，可在插件列表中显示并在新对话中触发。
-- WorkBuddy：面向非技术用户的表单、预检、启动提醒和一键执行包装。
-- 豆包：适配任务模式，利用 PC 端本地浏览器或 Web 端远程虚拟浏览器完成可视化网页任务。
+## 支持平台
+
+- Codex：本地 skill/plugin，可用 `run-post-loan-check.ps1` 和 `run-batch-post-loan-check.ps1` 直接执行。
+- WorkBuddy：按 skill、专家、专家团包装，提供非技术用户表单、预检和 JSON 结果。
+- 豆包办公任务：按浏览器任务/云端电脑任务设计，使用同一输入、输出、校验契约。
 
 ## 查询范围
 
@@ -15,25 +17,86 @@
 - 河南省市场监督管理局
 - 中国裁判文书网
 - 中国执行信息公开网
-- 百度前三页
-- 医院/医疗机构可选补充河南省卫生健康委员会
-- 法人/实控人可选补充被执行信息查询
+- 搜索引擎结果页
+- 医院/医疗机构自动补充卫健委查询：属地优先，属地不可用或无主体结果时切河南省卫健委
+- 可选法人/实控人被执行信息查询：必须由用户提供姓名和身份证号
 
-## 人机协作边界
+## 快速使用
 
-系统负责打开网页、填写企业名称/统一社会信用代码/身份证号、点击查询、验证结果页、截图和生成 Word。
+单家企业：
 
-用户只处理不能自动完成或不应绕过的事项：
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-post-loan-check.ps1 `
+  -CompanyName "濮阳豫能综合能源有限公司" `
+  -OrgCode "91410926MACJQ2HCXH" `
+  -TemplateSlots -SkipJudicial -NoPrompt
+```
 
-- 登录中国裁判文书网。
-- 中国执行信息公开网如需登录，由用户完成。
-- 中国执行信息公开网验证码由用户输入。
-- 查询个人被执行信息时，由用户在启动阶段提供姓名和身份证号。
+批量企业：
 
-验证码错误或页面未进入查询结果/无结果状态时，系统不会截图，会继续等待用户重新输入验证码。
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-batch-post-loan-check.ps1 `
+  -CompanyName "企业A,企业B,企业C" `
+  -OrgCode "代码A,代码B,代码C" `
+  -TemplateSlots -SkipJudicial -NoPrompt -MaxAttempts 2
+```
 
-## 合规说明
+重试上一批失败项：
 
-本项目用于聚合公开门户、公开网页或经授权访问页面中的信息，并保留截图证据。默认不绕过登录、验证码或访问控制。
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-batch-post-loan-check.ps1 `
+  -CompanyName "占位" -RetryFailed -TemplateSlots -SkipJudicial -NoPrompt -MaxAttempts 2
+```
 
-`ddddocr` 集成为可选辅助 OCR 能力，默认关闭；不得用于绕过司法、执行公开网等站点的验证码和访问控制。
+## 输出
+
+默认输出目录：
+
+```text
+%USERPROFILE%\Documents\CCB贷前贷后查询\outputs
+```
+
+单家报告：
+
+```text
+贷后查询-{企业名称}-{yyyyMMdd}.docx
+```
+
+批量报告：
+
+```text
+batch-post-loan-{yyyyMMdd-HHmm}/
+  reports/        最终 Word 报告
+  evidence/       每家企业截图、manifest、audit 证据
+  batch-summary.json
+```
+
+批量场景只需要把 `reports` 文件夹交给用户；截图和审计材料留在 `evidence`。
+
+## 配置
+
+一般不需要配置。若平台无法自动发现运行时，可设置环境变量：
+
+```powershell
+$env:POST_LOAN_NODE_EXE = "C:\path\to\node.exe"
+$env:POST_LOAN_PYTHON_EXE = "C:\path\to\python.exe"
+$env:POST_LOAN_NODE_MODULES = "C:\path\to\node_modules"
+$env:POST_LOAN_CHROME_EXE = "C:\path\to\chrome.exe"
+$env:POST_LOAN_OUTPUT_ROOT = "D:\reports"
+```
+
+也可以参考 `.env.example`。
+
+## 质量规则
+
+- 不把登录页、验证码页、异常页、空白页作为结果页。
+- 执行公开网必须确认结果/无结果状态后才截图。
+- 搜索引擎必须同一来源前三页完整可用才输出；中途触发验证、登录或异常流量则整组放弃。
+- 医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切省级。
+- 批量查询最终归集 Word 到 `reports`，截图和审计留在 `evidence`。
+
+## 合规边界
+
+本项目用于公开数据源或经授权访问数据源的信息归集和证据留痕。系统默认不绕过登录、验证码或访问控制。司法、政务、强风控门户按托管处理：系统自动打开页面并填好主体，用户在必要时完成登录或验证码，随后系统继续执行。
+
+可选 OCR 只用于合规、授权、低风险场景，不用于规避司法或政务门户的安全校验。

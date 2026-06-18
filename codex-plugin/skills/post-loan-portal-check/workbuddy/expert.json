@@ -10,10 +10,10 @@
     "fields": [
       {
         "name": "companyName",
-        "label": "企业名称",
-        "type": "text",
+        "label": "企业名称/批量企业名单",
+        "type": "textarea",
         "required": true,
-        "placeholder": "例如：濮阳豫能综合能源有限公司"
+        "placeholder": "单个企业直接输入名称；批量可用逗号、顿号或换行分隔"
       },
       {
         "name": "orgCode",
@@ -64,8 +64,11 @@
     "captchaBypass": false
   },
   "outputs": {
-    "defaultRoot": "D:\\项目文件\\中建黄河大桥贷后\\outputs",
+    "defaultRoot": "%USERPROFILE%\\Documents\\CCB贷前贷后查询\\outputs",
     "filePattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",
+    "batchFolderPattern": "batch-post-loan-{yyyyMMdd-HHmm}",
+    "batchReportsFolder": "reports",
+    "batchEvidenceFolder": "evidence",
     "openFolderOnComplete": true
   }
 }

@@ -1,5 +1,5 @@
 {
-  "defaultOutputRoot": "D:\\项目文件\\中建黄河大桥贷后\\outputs",
+  "defaultOutputRoot": "%USERPROFILE%\\Documents\\CCB贷前贷后查询\\outputs",
   "templateDocx": "assets/贷后查询模板.docx",
   "targets": [
     {

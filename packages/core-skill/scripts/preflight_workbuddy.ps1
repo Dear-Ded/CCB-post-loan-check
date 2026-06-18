@@ -5,13 +5,27 @@ param(
 $ErrorActionPreference = "SilentlyContinue"
 
 $skillRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$nodeExe = "C:\Users\80983\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
-$pythonExe = "C:\Users\80983\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
-$nodeModules = "C:\Users\80983\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules"
-$chromeExe = "C:\Users\80983\AppData\Local\Google\Chrome\Application\chrome.exe"
+$runtimeRoot = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies"
+$nodeExe = if ($env:POST_LOAN_NODE_EXE) { $env:POST_LOAN_NODE_EXE } else { Join-Path $runtimeRoot "node\bin\node.exe" }
+$pythonExe = if ($env:POST_LOAN_PYTHON_EXE) { $env:POST_LOAN_PYTHON_EXE } else { Join-Path $runtimeRoot "python\python.exe" }
+$nodeModules = if ($env:POST_LOAN_NODE_MODULES) { $env:POST_LOAN_NODE_MODULES } else { Join-Path $runtimeRoot "node\node_modules" }
+$chromeExe = if ($env:POST_LOAN_CHROME_EXE) {
+  $env:POST_LOAN_CHROME_EXE
+} else {
+  $chromeCandidates = @(
+    (Join-Path $env:LOCALAPPDATA "Google\Chrome\Application\chrome.exe"),
+    (Join-Path $env:ProgramFiles "Google\Chrome\Application\chrome.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "Google\Chrome\Application\chrome.exe")
+  )
+  ($chromeCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1)
+}
 $templateItem = Get-ChildItem -LiteralPath (Join-Path $skillRoot "assets") -Filter "*.docx" | Select-Object -First 1
 $template = if ($templateItem) { $templateItem.FullName } else { Join-Path $skillRoot "assets\template.docx" }
-$outputRoot = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("RDpc6aG555uu5paH5Lu2XOS4reW7uum7hOays+Wkp+ahpei0t+WQjlxvdXRwdXRz"))
+$outputRoot = if ($env:POST_LOAN_OUTPUT_ROOT) {
+  $env:POST_LOAN_OUTPUT_ROOT
+} else {
+  Join-Path ([Environment]::GetFolderPath("MyDocuments")) "CCB贷前贷后查询\outputs"
+}
 
 $checks = [ordered]@{
   skillRoot = $skillRoot

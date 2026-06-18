@@ -2,6 +2,21 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const { chromium } = require("playwright");
+const { AuditLog } = require("./framework/audit");
+const { SearchManager } = require("./framework/search_manager");
+const { SessionManager } = require("./framework/session_manager");
+const { TaskQueue } = require("./framework/task_queue");
+const { SourceStateStore } = require("./framework/source_state_store");
+const { ChallengeMode } = require("./framework/challenge_policy");
+const { JudicialSourcePolicy } = require("./framework/judicial_sources");
+const {
+  attachEnforcementResponseAudit,
+  getEnforcementDiagnosticState,
+  getCaptchaState,
+  isCaptchaFailure: isEnforcementCaptchaFailure,
+  isResultState: isEnforcementModuleResultState,
+  waitForCaptchaChange
+} = require("./framework/enforcement_source");
 
 function parseArgs(argv) {
   const out = { person: [] };
@@ -22,6 +37,7 @@ async function waitUntil(page, label, predicate, timeoutMs = 10 * 60 * 1000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     if (await predicate().catch(() => false)) return true;
+    if (page.isClosed && page.isClosed()) throw new Error(`Page closed while waiting for ${label}`);
     await page.waitForTimeout(1500);
   }
   throw new Error(`Timed out waiting for ${label}`);
@@ -58,8 +74,47 @@ function bingUrl(query) {
   return `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
 }
 
+function bingPageUrl(query, pageNo) {
+  const first = (pageNo - 1) * 10 + 1;
+  return `https://www.bing.com/search?q=${encodeURIComponent(query)}&first=${first}`;
+}
+
+const searchEngines = [
+  {
+    id: "baidu",
+    name: "百度搜索",
+    url: (query, pageNo) => baiduUrl(query, (pageNo - 1) * 10),
+    validUrl: (url) => url.includes("baidu.com/s")
+  },
+  {
+    id: "so360",
+    name: "360搜索",
+    url: (query, pageNo) => `https://www.so.com/s?q=${encodeURIComponent(query)}&pn=${pageNo}`,
+    validUrl: (url) => url.includes("so.com/s")
+  },
+  {
+    id: "sogou",
+    name: "搜狗搜索",
+    url: (query, pageNo) => `https://www.sogou.com/web?query=${encodeURIComponent(query)}&page=${pageNo}`,
+    validUrl: (url) => url.includes("sogou.com/web")
+  },
+  {
+    id: "bing",
+    name: "Bing搜索",
+    url: (query, pageNo) => bingPageUrl(query, pageNo),
+    validUrl: (url) => url.includes("bing.com/search")
+  }
+];
+
 async function pageText(page) {
   return (await page.locator("body").innerText({ timeout: 3000 }).catch(() => "")).replace(/\s+/g, " ");
+}
+
+async function isSearchVerificationPage(page, engine) {
+  const url = page.url();
+  const text = await pageText(page);
+  const signal = `${url} ${text}`.replace(/\s+/g, "");
+  return /wappass\.baidu\.com|passport\.baidu\.com|captcha|verify|unusualtraffic|安全验证|百度安全验证|请输入验证码|人机验证|验证你不是机器人|网络不给力|访问异常|系统检测到|异常流量|访问过于频繁/.test(signal);
 }
 
 async function screenshot(page, file, scrollY = 0) {
@@ -82,6 +137,58 @@ async function capture(page, shots, name, file, scrollY = 0, options = {}) {
   });
 }
 
+async function tryCapturePortal(page, shots, name, file, url, scrollY = 0, options = {}) {
+  try {
+    await goto(page, url);
+    await capture(page, shots, name, file, scrollY, options);
+    return { ok: true, name, url, file };
+  } catch (error) {
+    const message = String(error && error.message ? error.message : error);
+    console.log(`${name} 抓取失败，跳过该门户：${message}`);
+    return { ok: false, name, url, error: message };
+  }
+}
+
+function isUsefulPortalCapture(result, company) {
+  if (!result?.ok) return false;
+  const shot = result.shot;
+  if (!shot) return true;
+  if (!shot.validation?.ok) return false;
+  const text = String(shot.text || "");
+  return text.includes(company) || !result.requireSubjectMatch;
+}
+
+async function tryCapturePortalCandidates(page, shots, name, candidates, audit, company, add) {
+  const startedCount = shots.length;
+  const attempts = [];
+  for (const candidate of candidates) {
+    const file = candidate.file || add(candidate.name || name);
+    const beforeCount = shots.length;
+    const result = await tryCapturePortal(page, shots, candidate.name || name, file, candidate.url, candidate.scrollY || 0, candidate.options || {});
+    const shot = shots[shots.length - 1];
+    result.shot = shots.length > beforeCount ? shot : null;
+    result.requireSubjectMatch = Boolean(candidate.requireSubjectMatch);
+    attempts.push({
+      label: candidate.name || name,
+      url: candidate.url,
+      ok: result.ok,
+      validationOk: result.shot?.validation?.ok,
+      subjectMatched: result.shot ? String(result.shot.text || "").includes(company) : false,
+      error: result.error || ""
+    });
+    if (isUsefulPortalCapture(result, company)) {
+      audit?.record("portal_candidate_selected", { name, company, attempts });
+      return result;
+    }
+    if (shots.length > beforeCount) {
+      shots.splice(beforeCount, shots.length - beforeCount);
+      try { fs.unlinkSync(file); } catch {}
+    }
+  }
+  audit?.record("portal_candidates_failed", { name, company, attempts });
+  return { ok: false, name, attempts, screenshotsBefore: startedCount, screenshotsAfter: shots.length };
+}
+
 async function captureCompleteScroll(page, shots, add, baseName) {
   const metrics = await page.evaluate(() => ({
     scrollHeight: Math.max(document.body.scrollHeight, document.documentElement.scrollHeight),
@@ -98,6 +205,43 @@ async function captureCompleteScroll(page, shots, add, baseName) {
     const file = add(`${baseName}${suffix}`);
     await capture(page, shots, `${baseName}${suffix}`, file, deduped[i]);
   }
+}
+
+async function captureSearchEvidence(page, shots, add, company) {
+  const query = company;
+  const companyTerms = company
+    .replace(/[（）()]/g, " ")
+    .replace(/有限公司|股份|集团|分行|公司/g, " ")
+    .split(/\s+/)
+    .flatMap((part) => part.length > 4 ? [part, part.slice(0, 2), part.slice(2, 4)] : [part])
+    .filter((part) => part && part.length >= 2);
+  for (const engine of searchEngines) {
+    let captured = 0;
+    let blocked = false;
+    for (const pageNo of [1, 2, 3]) {
+      try {
+        await page.goto(engine.url(query, pageNo), { waitUntil: "domcontentloaded", timeout: 15000 });
+        await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(600);
+      } catch (error) {
+        console.log(`${engine.name}第 ${pageNo} 页加载失败，尝试下一个搜索源。`);
+        blocked = true;
+        break;
+      }
+      const text = await pageText(page);
+      const termHits = companyTerms.filter((term) => text.includes(term)).length;
+      const subjectMatched = text.includes(company) || termHits >= Math.min(2, companyTerms.length);
+      if (!engine.validUrl(page.url()) || await isSearchVerificationPage(page, engine.id) || !subjectMatched) {
+        console.log(`${engine.name}第 ${pageNo} 页不是可用主体搜索结果页，尝试下一个搜索源。`);
+        blocked = true;
+        break;
+      }
+      await captureCompleteScroll(page, shots, add, `${engine.name}第${pageNo}页`);
+      captured += 1;
+    }
+    if (!blocked && captured > 0) return;
+  }
+  console.log(`所有搜索源均未取得可用的主体搜索结果页，搜索证据本次空缺。`);
 }
 
 function safePart(value) {
@@ -168,7 +312,10 @@ function validateCapture(name, text, url, options = {}) {
   if ((name.includes("中国执行信息公开网") || name.includes("被执行")) && !options.enforcementValidated) {
     problems.push("执行公开网尚未确认进入查询结果/无结果页面");
   }
-  if (name.includes("百度搜索") && !url.includes("baidu.com")) problems.push("不是百度搜索结果页");
+  if (name.includes("百度搜索") && !url.includes("baidu.com/s")) problems.push("不是百度搜索结果页");
+  if (name.includes("Bing搜索") && !url.includes("bing.com/search")) problems.push("不是 Bing 搜索结果页");
+  if (name.includes("360搜索") && !url.includes("so.com/s")) problems.push("不是 360 搜索结果页");
+  if (name.includes("搜狗搜索") && !url.includes("sogou.com/web")) problems.push("不是搜狗搜索结果页");
   return { ok: problems.length === 0, problems };
 }
 
@@ -244,35 +391,152 @@ async function clickEnforcementSearch(page) {
   await page.keyboard.press("Enter");
 }
 
-async function runEnforcementAfterCaptcha(page, subjectName) {
+async function fillAndSearchJudgments(page, company) {
+  const searchInput = page.locator([
+    "input.searchKey",
+    "input[placeholder*='输入案由']",
+    "input[placeholder*='全文检索']",
+    "input[placeholder*='关键词']",
+    "input[type='text']"
+  ].join(", ")).first();
+  await searchInput.waitFor({ state: "visible", timeout: 15000 });
+  await searchInput.click({ clickCount: 3 }).catch(() => {});
+  await searchInput.fill(company);
+  await waitUntil(page, "judgment search input filled", async () => {
+    const value = await searchInput.inputValue().catch(() => "");
+    return value.includes(company);
+  }, 10000);
+  const searchButtons = [
+    "button:has-text('搜索')",
+    "a:has-text('搜索')",
+    "text=搜索"
+  ];
+  for (const selector of searchButtons) {
+    const button = page.locator(selector).last();
+    if (await button.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await button.click();
+      return;
+    }
+  }
+  await page.keyboard.press("Enter");
+}
+
+async function getCaptchaSignature(page) {
+  const state = await getCaptchaState(page);
+  return `${state.imageSrc}|${state.imageComplete}|${state.imageSize}|${state.hidden}`;
+}
+
+async function resetEnforcementCaptcha(page, subjectName, codeOrId, audit) {
+  console.log(`执行公开网 ${subjectName} 正在刷新验证码并恢复查询条件...`);
+  audit?.record("enforcement_captcha_reset_started", { subjectName });
+  await waitForEnforcementReady(page, `执行公开网 ${subjectName}`);
+  await page.locator("#pName").fill(subjectName).catch(() => {});
+  await page.locator("#pCardNum").fill(codeOrId).catch(() => {});
+  await page.locator("#yzm").fill("").catch(() => {});
+  const beforeState = await getCaptchaState(page);
+  audit?.record("enforcement_diagnostic_before_refresh", {
+    subjectName,
+    state: await getEnforcementDiagnosticState(page)
+  });
+  audit?.record("enforcement_captcha_state_before_refresh", { subjectName, state: beforeState });
+  const captchaImage = page.locator("img[src*='captcha'], img[src*='verify'], img[src*='code'], #captchaImg, .captcha img").first();
+  if (await captchaImage.isVisible({ timeout: 1000 }).catch(() => false)) {
+    await captchaImage.click({ force: true }).catch(() => {});
+  } else {
+    await page.keyboard.press("Control+R").catch(() => {});
+    await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
+    await waitForEnforcementReady(page, `执行公开网 ${subjectName}`);
+    await page.locator("#pName").fill(subjectName).catch(() => {});
+    await page.locator("#pCardNum").fill(codeOrId).catch(() => {});
+  }
+  const afterState = await waitForCaptchaChange(page, beforeState, 8000);
+  audit?.record("enforcement_captcha_reset_completed", { subjectName, state: afterState });
+  audit?.record("enforcement_diagnostic_after_refresh", {
+    subjectName,
+    state: await getEnforcementDiagnosticState(page)
+  });
+  await page.locator("#yzm").click().catch(() => {});
+}
+
+async function runEnforcementAfterCaptcha(page, subjectName, codeOrId, audit, options = {}) {
+  const mode = options.mode || "assisted";
+  attachEnforcementResponseAudit(page, audit, subjectName);
+  await resetEnforcementCaptcha(page, subjectName, codeOrId, audit);
   for (let attempt = 1; attempt <= 12; attempt += 1) {
     console.log(`等待执行公开网 ${subjectName} 的验证码输入，第 ${attempt}/12 次...`);
+    audit?.record("enforcement_captcha_waiting", { subjectName, attempt, mode });
     await waitUntil(page, `China Enforcement captcha input for ${subjectName}`, async () => {
       const value = await page.locator("#yzm").inputValue().catch(() => "");
       return value.trim().length >= 4;
     }, 10 * 60 * 1000);
+    await page.waitForTimeout(500);
+    const enteredCaptcha = await page.locator("#yzm").inputValue().catch(() => "");
+    if (enteredCaptcha.trim().length < 4) continue;
+    const submitState = await getCaptchaState(page);
+    const submitDiagnostic = await getEnforcementDiagnosticState(page);
+    audit?.record("enforcement_submit_attempt", {
+      subjectName,
+      attempt,
+      captchaLength: enteredCaptcha.trim().length,
+      captchaState: submitState,
+      diagnostic: submitDiagnostic
+    });
 
     await clickEnforcementSearch(page);
     await page.waitForTimeout(2500);
 
     const confirmed = await waitUntil(page, `China Enforcement result for ${subjectName}`, async () => {
       const text = await pageText(page);
-      if (isCaptchaFailure(text)) return true;
-      return isEnforcementResultState(text);
+      if (isCaptchaFailure(text) || isEnforcementCaptchaFailure(text)) return true;
+      return isEnforcementResultState(text) || isEnforcementModuleResultState(text);
     }, 30000).then(() => true).catch(() => false);
 
     const text = await pageText(page);
-    if (confirmed && isEnforcementResultState(text) && !isCaptchaFailure(text)) {
+    if (confirmed && (isEnforcementResultState(text) || isEnforcementModuleResultState(text)) && !isCaptchaFailure(text) && !isEnforcementCaptchaFailure(text)) {
       console.log(`执行公开网 ${subjectName} 已确认进入查询结果/无结果页面。`);
       page.__postLoanEnforcementValidated = true;
+      audit?.record("enforcement_result_confirmed", {
+        subjectName,
+        attempt,
+        url: page.url(),
+        diagnostic: await getEnforcementDiagnosticState(page)
+      });
       return { ok: true, text };
     }
 
-    console.log(`执行公开网 ${subjectName} 尚未确认查询成功，可能是验证码错误或页面无响应。请在当前页重新输入验证码，我会继续等待。`);
-    await page.locator("#yzm").fill("").catch(() => {});
-    await page.locator("#yzm").click().catch(() => {});
+    console.log(`执行公开网 ${subjectName} 尚未确认查询成功，可能是验证码错误、验证码已刷新或页面无响应。正在刷新验证码，请输入新图上的验证码。`);
+    audit?.record("enforcement_captcha_attempt_failed", {
+      subjectName,
+      attempt,
+      url: page.url(),
+      textSample: text.slice(0, 200),
+      diagnostic: await getEnforcementDiagnosticState(page)
+    });
+    await resetEnforcementCaptcha(page, subjectName, codeOrId, audit);
   }
   throw new Error(`执行公开网 ${subjectName} 多次验证码/查询未成功，拒绝截图`);
+}
+
+async function completeEnforcementQuery(context, page, subjectName, codeOrId, audit, options = {}) {
+  let current = page;
+  for (let recovery = 1; recovery <= 3; recovery += 1) {
+    try {
+      if (!current || current.isClosed()) {
+        current = await context.newPage();
+        await fillEnforcementQuery(current, subjectName, codeOrId);
+      }
+      await runEnforcementAfterCaptcha(current, subjectName, codeOrId, audit, options);
+      return current;
+    } catch (error) {
+      const message = String(error && error.message ? error.message : error);
+      if (!/Target page|has been closed|Page closed/.test(message) || recovery === 3) throw error;
+      console.log(`执行公开网 ${subjectName} 页面已关闭，正在重新打开并恢复查询，第 ${recovery + 1}/3 次...`);
+      audit?.record("enforcement_page_recovered", { subjectName, recovery, error: message });
+      current = await context.newPage();
+      await fillEnforcementQuery(current, subjectName, codeOrId);
+    }
+  }
+  return current;
 }
 
 async function main() {
@@ -282,38 +546,65 @@ async function main() {
   let orgCode = args["org-code"] || "";
   const subjectType = args["subject-type"] || "enterprise";
   const includeHealthCommission = Boolean(args["include-health-commission"]);
+  const skipJudicial = Boolean(args["skip-judicial"]);
+  const skipSearch = Boolean(args["skip-search"]);
+  const judicialMode = args["judicial-mode"] || ChallengeMode.ASSISTED;
+  const headless = Boolean(args.headless);
+  const requiresForeground = !skipJudicial && judicialMode !== ChallengeMode.BLOCKED;
   const persons = args.person.map(parsePerson);
 
   if (!company || !outDir) throw new Error("--company and --out-dir are required");
   if (subjectType === "person" && !orgCode) throw new Error("--org-code must be the personal ID number for person subjects");
 
-  console.log("启动阶段只麻烦用户一次：");
-  console.log("1. 请在打开的 Chrome 中登录中国裁判文书网。");
-  console.log("2. 中国执行信息公开网可能需要登录；如果页面提示登录，请在启动阶段完成登录。");
-  console.log("3. 中国执行信息公开网页面经常加载失败，我会自动多次重试；你只需要等页面出现输入框。");
-  console.log("4. 请在每个中国执行信息公开网页面只输入验证码。名称、组织机构代码/身份证号由我填。");
-  console.log("5. 验证码可能多次不对或过期；如果页面没有进入查询结果/无结果状态，我不会截图，会继续等你重新输入验证码。");
-  if (persons.length) console.log(`6. 本次会同步查询 ${persons.map((p) => p.name).join("、")} 的被执行信息；相关验证码也会在启动阶段一次性处理。`);
-  console.log("完成后不用回来告诉我，脚本会自动检测，确认真的查询成功后再截图并继续交付。");
+  if (!skipJudicial && judicialMode !== ChallengeMode.BLOCKED) {
+    console.log("启动阶段只麻烦用户一次：");
+    console.log("1. 请在打开的 Chrome 中登录中国裁判文书网。");
+    console.log("2. 中国执行信息公开网可能需要登录；如果页面提示登录，请在启动阶段完成登录。");
+    console.log("3. 中国执行信息公开网页面经常加载失败，我会自动多次重试；你只需要等页面出现输入框。");
+    console.log("4. 请在每个中国执行信息公开网页面只输入验证码。名称、组织机构代码/身份证号由我填。");
+    console.log("5. 验证码可能多次不对或过期；如果页面没有进入查询结果/无结果状态，我不会截图，会继续等你重新输入验证码。");
+    if (persons.length) console.log(`6. 本次会同步查询 ${persons.map((p) => p.name).join("、")} 的被执行信息；相关验证码也会在启动阶段一次性处理。`);
+    console.log("完成后不用回来告诉我，脚本会自动检测，确认真的查询成功后再截图并继续交付。");
+  } else {
+    console.log("后台查询模式：本次不需要人工登录或验证码，系统将自动完成可用门户查询。");
+  }
 
   fs.mkdirSync(outDir, { recursive: true });
-  const chrome = "C:\\Users\\80983\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe";
-  const profile = path.join(os.homedir(), ".codex", "post-loan-portal-check", "chrome-profile");
+  const audit = new AuditLog(outDir);
+  audit.record("run_started", { company, subjectType, includeHealthCommission, skipJudicial, judicialMode });
+  const chromeCandidates = [
+    process.env.POST_LOAN_CHROME_EXE,
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "Google", "Chrome", "Application", "chrome.exe") : "",
+    process.env.ProgramFiles ? path.join(process.env.ProgramFiles, "Google", "Chrome", "Application", "chrome.exe") : "",
+    process.env["ProgramFiles(x86)"] ? path.join(process.env["ProgramFiles(x86)"], "Google", "Chrome", "Application", "chrome.exe") : ""
+  ].filter(Boolean);
+  const chrome = chromeCandidates.find((candidate) => fs.existsSync(candidate));
+  const sessionManager = new SessionManager({ audit });
+  const profileScope = skipJudicial ? "government" : "judicial";
+  const persistentProfile = sessionManager.profilePath(profileScope);
+  const profile = skipJudicial
+    ? path.join(persistentProfile, `run-${Date.now()}-${process.pid}`)
+    : persistentProfile;
+  fs.mkdirSync(profile, { recursive: true });
+  const sourceStateStore = new SourceStateStore({ file: path.join(persistentProfile, "source-state.json"), audit });
+  const judicialPolicy = new JudicialSourcePolicy({ mode: judicialMode, audit });
+  const previousSession = sessionManager.readState(profileScope);
+  audit.record("browser_profile_selected", { scope: profileScope, profile, persistentProfile, hasPreviousSession: Boolean(previousSession) });
   const context = await chromium.launchPersistentContext(profile, {
-    executablePath: fs.existsSync(chrome) ? chrome : undefined,
-    headless: false,
+    executablePath: chrome,
+    headless: headless && !requiresForeground,
     viewport: { width: 1268, height: 755 },
     locale: "zh-CN",
     timezoneId: "Asia/Shanghai"
   });
 
-  const page = context.pages()[0] || await context.newPage();
-  const enforcementPage = await context.newPage();
+  const page = await context.newPage();
+  const enforcementPage = skipJudicial ? null : await context.newPage();
   const shots = [];
   const add = makeAdd(outDir, shots);
 
   let orgCodeLookup = null;
-  if (subjectType === "enterprise" && !orgCode) {
+  if (subjectType === "enterprise" && !orgCode && !skipJudicial) {
     console.log("未提供统一社会信用代码，先自动查询企业代码...");
     orgCodeLookup = await lookupOrgCode(context, company);
     orgCode = orgCodeLookup.code;
@@ -327,57 +618,127 @@ async function main() {
     }
   }
 
-  await goto(page, "https://wenshu.court.gov.cn/");
-  await fillEnforcementQuery(enforcementPage, company, orgCode);
+  if (!skipJudicial && judicialPolicy.shouldBlock()) {
+    audit.record("judicial_sources_blocked", { company, mode: judicialMode });
+  }
+
+  const judicialEnabled = !skipJudicial && !judicialPolicy.shouldBlock();
+
+  if (judicialEnabled) {
+    judicialPolicy.recordDecision("wenshu", judicialPolicy.canAutoSolveCaptcha() ? "auto_mode" : "assisted_mode");
+    judicialPolicy.recordDecision("zhixing", judicialPolicy.canAutoSolveCaptcha() ? "auto_mode" : "assisted_mode");
+    await goto(page, "https://wenshu.court.gov.cn/");
+    await fillEnforcementQuery(enforcementPage, company, orgCode);
+  }
 
   const personQueries = [];
-  for (const person of persons) {
+  for (const person of judicialEnabled ? persons : []) {
     const personPage = await context.newPage();
     await fillEnforcementQuery(personPage, person.name, person.idNumber);
     personQueries.push({ person, page: personPage });
   }
 
-  console.log("等待裁判文书网登录成功，以及执行公开网验证码输入...");
-  await waitUntil(page, "China Judgments Online login", async () => {
-    const body = await pageText(page);
-    return body.includes("退出") || body.includes("欢迎您");
-  });
-  await runEnforcementAfterCaptcha(enforcementPage, company);
-  for (const query of personQueries) {
-    console.log(`等待 ${query.person.name} 的个人被执行查询验证码输入...`);
-    await runEnforcementAfterCaptcha(query.page, query.person.name);
-  }
-  console.log("启动阶段人工动作已完成，后续不再打扰用户。");
-
-  let file = add("河南省应急管理厅");
-  await goto(page, `https://yjglt.henan.gov.cn/wzjs/?keywords=${encodeURIComponent(company)}`);
-  await capture(page, shots, "河南省应急管理厅", file);
-
-  file = add("河南省生态环境厅");
-  await goto(page, `https://sthjt.henan.gov.cn/wzjs/?keywords=${encodeURIComponent(company)}`);
-  await capture(page, shots, "河南省生态环境厅", file);
-
-  file = add("河南省市场监督管理局");
-  await goto(page, `https://scjg.henan.gov.cn/search/?keywords=${encodeURIComponent(company)}`);
-  await capture(page, shots, "河南省市场监督管理局", file);
-
-  if (includeHealthCommission) {
-    file = add("河南省卫生健康委员会");
-    await goto(page, `https://wsjkw.henan.gov.cn/so.html?keywords=${encodeURIComponent(company)}`).catch(async () => {
-      await goto(page, baiduUrl(`site:wsjkw.henan.gov.cn ${company}`, 0));
+  if (judicialEnabled) {
+    console.log("等待裁判文书网登录成功...");
+    await waitUntil(page, "China Judgments Online login", async () => {
+      const body = await pageText(page);
+      return body.includes("退出") || body.includes("欢迎您");
     });
-    await capture(page, shots, "河南省卫生健康委员会", file);
+    console.log("裁判文书网登录已确认，先执行裁判文书搜索，执行公开网稍后单独处理。");
+  } else {
+    console.log("本次按临时口径跳过裁判文书网和执行信息公开网。");
   }
 
-  file = add("中国裁判文书网");
-  await goto(page, `https://wenshu.court.gov.cn/website/wenshu/181217BMTKHNT2W0/index.html?s21=${encodeURIComponent(company)}`);
-  await page.locator("input.searchKey, input[placeholder*='输入案由'], input[type=text]").first().fill(company).catch(() => {});
-  await page.locator("text=搜索").last().click().catch(() => page.keyboard.press("Enter"));
-  await page.waitForTimeout(4000);
-  await capture(page, shots, "中国裁判文书网", file);
+  const portalQueue = new TaskQueue({ audit, concurrency: 1, defaultRetries: 1, defaultTimeoutMs: 90000 });
+  async function withPortalPage(task) {
+    const isolatedPage = await context.newPage();
+    try {
+      return await task(isolatedPage);
+    } finally {
+      await isolatedPage.close().catch(() => {});
+    }
+  }
+  portalQueue.add({
+    id: "portal-henan-emergency",
+    sourceId: "henan_emergency",
+    run: async () => withPortalPage((portalPage) => tryCapturePortal(portalPage, shots, "河南省应急管理厅", add("河南省应急管理厅"), `https://yjglt.henan.gov.cn/wzjs/?keywords=${encodeURIComponent(company)}`))
+  });
+  portalQueue.add({
+    id: "portal-henan-ecology",
+    sourceId: "henan_ecology",
+    run: async () => withPortalPage((portalPage) => tryCapturePortal(portalPage, shots, "河南省生态环境厅", add("河南省生态环境厅"), `https://sthjt.henan.gov.cn/wzjs/?keywords=${encodeURIComponent(company)}`))
+  });
+  portalQueue.add({
+    id: "portal-henan-market",
+    sourceId: "henan_market",
+    run: async () => withPortalPage((portalPage) => tryCapturePortal(portalPage, shots, "河南省市场监督管理局", add("河南省市场监督管理局"), `https://scjg.henan.gov.cn/search/?keywords=${encodeURIComponent(company)}`))
+  });
+  if (includeHealthCommission) {
+    portalQueue.add({
+      id: "portal-health-local-or-provincial",
+      sourceId: "henan_health",
+      run: async () => withPortalPage((portalPage) => tryCapturePortalCandidates(
+        portalPage,
+        shots,
+        "河南省卫生健康委员会",
+        [
+          {
+            name: "濮阳市卫生健康委员会",
+            url: `https://weijian.puyang.gov.cn/?keywords=${encodeURIComponent(company)}`,
+            requireSubjectMatch: true
+          },
+          {
+            name: "河南省卫生健康委员会",
+            url: `https://wsjkw.henan.gov.cn/so.html?keywords=${encodeURIComponent(company)}`,
+            requireSubjectMatch: true
+          },
+          {
+            name: "河南省卫生健康委员会",
+            url: `https://wsjkw.henan.gov.cn/`,
+            requireSubjectMatch: false
+          },
+          {
+            name: "濮阳市卫生健康委员会",
+            url: `https://weijian.puyang.gov.cn/`,
+            requireSubjectMatch: false
+          }
+        ],
+        audit,
+        company,
+        add
+      ))
+    });
+  }
+  await portalQueue.runAll();
+  audit.record("portal_queue_completed", {
+    company,
+    results: portalQueue.results || []
+  });
 
-  file = add("中国执行信息公开网");
-  await capture(enforcementPage, shots, "中国执行信息公开网", file, 0, { enforcementValidated: Boolean(enforcementPage.__postLoanEnforcementValidated) });
+  if (judicialEnabled) {
+    file = add("中国裁判文书网");
+    await goto(page, `https://wenshu.court.gov.cn/website/wenshu/181217BMTKHNT2W0/index.html?s21=${encodeURIComponent(company)}`);
+    await fillAndSearchJudgments(page, company);
+    await page.waitForTimeout(4000);
+    await capture(page, shots, "中国裁判文书网", file);
+
+    let validatedEnforcementPage = null;
+    try {
+      console.log("开始单独处理执行公开网验证码。");
+      validatedEnforcementPage = await completeEnforcementQuery(context, enforcementPage, company, orgCode, audit, { mode: judicialMode });
+      for (const query of personQueries) {
+        console.log(`等待 ${query.person.name} 的个人被执行查询验证码输入...`);
+        query.page = await completeEnforcementQuery(context, query.page, query.person.name, query.person.idNumber, audit, { mode: judicialMode });
+      }
+    } catch (error) {
+      console.log(`执行公开网未能确认进入结果页：${error && error.message ? error.message : error}`);
+    }
+
+    file = add("中国执行信息公开网");
+    if (validatedEnforcementPage) {
+      await capture(validatedEnforcementPage, shots, "中国执行信息公开网", file, 0, { enforcementValidated: Boolean(validatedEnforcementPage.__postLoanEnforcementValidated) });
+    }
+  }
 
   for (const query of personQueries) {
     const person = query.person;
@@ -399,9 +760,22 @@ async function main() {
     }
   }
 
-  for (const pageNo of [1, 2, 3]) {
-    await goto(page, baiduUrl(company, (pageNo - 1) * 10));
-    await captureCompleteScroll(page, shots, add, `百度搜索第${pageNo}页`);
+  if (!skipSearch) {
+    const searchManager = new SearchManager({
+      audit,
+      cooldownMs: Number(args["search-cooldown-ms"] || 8 * 60 * 1000),
+      stateStore: sourceStateStore
+    });
+    await searchManager.capture({
+      page,
+      company,
+      add,
+      captureCompleteScroll: async (searchPage, addFile, baseName) => {
+        await captureCompleteScroll(searchPage, shots, addFile, baseName);
+      }
+    });
+  } else {
+    audit.record("search_skipped", { company });
   }
 
   const manifest = {
@@ -410,6 +784,7 @@ async function main() {
     orgCodeLookup,
     subjectType,
     includeHealthCommission,
+    skipJudicial,
     persons: persons.map((p) => ({ name: p.name })),
     templateSlots: true,
     generatedAt: new Date().toISOString(),
@@ -417,7 +792,17 @@ async function main() {
     outputDir: outDir
   };
   fs.writeFileSync(path.join(outDir, "template-slots-manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+  audit.record("run_completed", { company, screenshotCount: shots.length });
+  sessionManager.writeState(profileScope, {
+    status: "valid",
+    company,
+    skipJudicial,
+    judicialMode,
+    lastRunAt: new Date().toISOString()
+  });
+  audit.flush();
   await context.close();
+  if (skipJudicial) fs.rmSync(profile, { recursive: true, force: true });
   console.log(path.join(outDir, "template-slots-manifest.json"));
 }
 

@@ -54,7 +54,7 @@ foreach ($item in $OrgCode) {
 $summary = [System.Collections.Generic.List[object]]::new()
 $effectiveHeadless = $Headless -or ($SkipJudicial -and $NoPrompt)
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$batchRoot = Join-Path $OutputRoot ("batch-post-loan-{0}" -f $stamp)
+$batchRoot = Join-Path $OutputRoot ("batch-post-loan-{0}-{1}" -f $stamp, $PID)
 
 if ($RetryFailed) {
   $batchDirs = Get-ChildItem -LiteralPath $OutputRoot -Directory -Filter "batch-post-loan-*" -ErrorAction SilentlyContinue |

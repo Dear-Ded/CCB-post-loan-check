@@ -12,6 +12,26 @@ Doubao task mode should run the workflow as a browser-state task:
 - For batch tasks, keep the user-facing output to the `reports` folder and keep screenshots/audit evidence under `evidence`.
 - Do not assume local Windows paths exist in a remote task environment; use the packaged scripts when available, otherwise reproduce the same browser workflow and output contract.
 
+## Local Entry
+
+If Doubao runs on a PC client with local file access, call:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\doubao\run_doubao_local.ps1 `
+  -CompanyName "濮阳豫能综合能源有限公司" `
+  -OrgCode "91410926MACJQ2HCXH" `
+  -SkipJudicial -SkipSearch -Json
+```
+
+For batch:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\doubao\run_doubao_local.ps1 `
+  -CompanyName "企业A,企业B" `
+  -OrgCode "代码A,代码B" `
+  -SkipJudicial -SkipSearch -Json
+```
+
 ## User Handoff
 
 At the beginning of the task, tell the user:

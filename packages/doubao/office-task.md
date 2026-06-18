@@ -26,7 +26,7 @@
 ## 输出要求
 
 - 单家报告：`贷后查询-{企业名称}-{yyyyMMdd}.docx`
-- 批量报告文件夹：`batch-post-loan-{yyyyMMdd-HHmmss}`
+- 批量报告文件夹：`batch-post-loan-{yyyyMMdd-HHmmss}-{pid}`
 - 批量最终交付：只展示 `reports` 文件夹。
 - 证据归档：截图、manifest、audit 放入 `evidence`。
 - 用户最终要拿到的是 Word 报告；不要让用户在截图堆里找结果。

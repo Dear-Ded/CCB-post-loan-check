@@ -3,6 +3,7 @@
   "displayName": "CCB贷前贷后查询",
   "mode": "browser-task",
   "targetEnvironments": ["pc-local-browser", "web-remote-browser", "mobile-supervised-task"],
+  "localEntrypoint": "run_doubao_local.ps1",
   "startupNotice": [
     "用户只需要输入企业名；批量时可粘贴多个企业名。",
     "无需司法门户时尽量后台执行，不打扰用户。",
@@ -33,7 +34,7 @@
   },
   "outputContract": {
     "singleReportName": "贷后查询-{companyName}-{yyyyMMdd}.docx",
-    "batchFolderName": "batch-post-loan-{yyyyMMdd-HHmmss}",
+    "batchFolderName": "batch-post-loan-{yyyyMMdd-HHmmss}-{pid}",
     "reportsFolder": "reports",
     "evidenceFolder": "evidence",
     "summaryFile": "batch-summary.json"

@@ -69,7 +69,7 @@
   "outputs": {
     "defaultRoot": "%USERPROFILE%\\Documents\\CCB贷前贷后查询\\outputs",
     "filePattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",
-    "batchFolderPattern": "batch-post-loan-{yyyyMMdd-HHmmss}",
+    "batchFolderPattern": "batch-post-loan-{yyyyMMdd-HHmmss}-{pid}",
     "batchReportsFolder": "reports",
     "batchEvidenceFolder": "evidence",
     "openFolderOnComplete": true

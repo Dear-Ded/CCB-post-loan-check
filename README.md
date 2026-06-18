@@ -81,7 +81,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\core-skill\wo
 批量报告：
 
 ```text
-batch-post-loan-{yyyyMMdd-HHmmss}/
+batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/
   reports/        最终 Word 报告
   evidence/       每家企业截图、manifest、audit 证据
   batch-summary.json

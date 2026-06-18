@@ -16,6 +16,24 @@
 - 企业管理员：启用私有化档位，全局确认后能力默认全开，再按源关闭。
 - 审计人员：每次挑战、失败、截图、报告路径都有证据链。
 
+## 工作流
+
+```mermaid
+flowchart LR
+  A["输入企业名/批量名单"] --> B["解析主体与企业代码"]
+  B --> C["执行门户查询"]
+  C --> D["挑战处理策略"]
+  D --> D1["auto: 自动处理"]
+  D --> D2["assisted: 用户托管"]
+  D --> D3["blocked: 阻断并审计"]
+  D1 --> E["结果页校验"]
+  D2 --> E
+  D3 --> F["失败原因留痕"]
+  E --> G["截图证据"]
+  G --> H["生成 Word"]
+  H --> I["单家报告或 batch reports"]
+```
+
 ## 平台适配
 
 | 平台 | 形态 | 入口 | 输出 |
@@ -87,6 +105,14 @@ batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/
   batch-summary.json
 ```
 
+批量交付时，用户只需要下载或交付 `reports`：
+
+```text
+reports/
+  贷后查询-企业A-20260618.docx
+  贷后查询-企业B-20260618.docx
+```
+
 ## 挑战处理策略
 
 普通公开、授权、内部数据源默认 `auto`，OCR、自动填充、自动重试开箱即用。司法、政务、强风控门户在普通模式下默认托管处理。企业私有化部署可以启用全源自动档位。
@@ -119,6 +145,24 @@ $env:POST_LOAN_CHALLENGE_POLICY = ".\packages\core-skill\references\challenge-po
 - 搜索引擎必须同一来源前三页完整可用才输出；中途触发验证、登录或异常流量则整组放弃。
 - 医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切省级。
 - 批量查询只向用户交付 `reports`，截图和审计留在 `evidence`。
+
+## 版本验收
+
+仓库内置输出契约验收脚本，用来确认各平台入口不是“只写了描述”，而是真的能产出设计标准要求的交付物：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\test-output-contract.ps1 `
+  -OutputRoot "C:\path\to\outputs" -Json
+```
+
+已覆盖验收项：
+
+- Codex 单家和批量入口
+- WorkBuddy 单家 JSON 和批量 JSON 入口
+- 豆包 PC 本地任务单家和批量入口
+- Word 文件存在且非空
+- manifest 存在且包含截图
+- 批量 `reports`、`evidence`、`batch-summary.json` 完整
 
 ## 文档
 

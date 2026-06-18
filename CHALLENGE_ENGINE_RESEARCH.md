@@ -24,6 +24,7 @@
 
 适用范围：
 
+- 普通公开数据源
 - 内部系统
 - 明确授权系统
 - 普通低风险公开源
@@ -39,7 +40,7 @@
 
 开关：
 
-- `POST_LOAN_ENABLE_LOW_RISK_OCR=1`
+- `POST_LOAN_ENABLE_LOW_RISK_OCR=1` 默认开启；设置为 `0` 可关闭低风险 OCR
 - `POST_LOAN_CHALLENGE_POLICY=path\to\policy.json`
 
 ### 第二档：托管处理
@@ -98,3 +99,39 @@
 - 隐匿或伪装自动化访问以规避明确风控。
 
 这些路线即使技术上存在，也不适合作为默认公开产品能力。产品应提供可配置、可审计、来源分级的挑战处理模块，把能力交给合规场景使用。
+
+## 用户自定义配置
+
+三档策略是系统默认值，不是硬编码限制。默认值面向大多数用户体验：普通公开/授权/内部数据源为 `auto`，司法/政务强风控为 `assisted`，异常风控和明确禁止为 `blocked`。高级用户可以通过 `POST_LOAN_CHALLENGE_POLICY` 指向 JSON 策略文件，按数据源类型或具体数据源 ID 覆盖处理档位。
+
+示例：
+
+```json
+{
+  "government": {
+    "mode": "assisted",
+    "allowSessionReuse": true
+  },
+  "search:bing": {
+    "mode": "assisted",
+    "riskAcknowledged": true
+  },
+  "internal:erp-captcha": {
+    "mode": "auto",
+    "risk": "low",
+    "allowOcr": true,
+    "riskAcknowledged": true
+  }
+}
+```
+
+风险确认规则：
+
+- 从 `auto` 改成 `assisted` 或 `blocked`：直接生效。
+- 从 `assisted` / `blocked` 改成 `auto`：必须写入 `riskAcknowledged: true`。
+- 桌面产品可通过 `scripts/confirm_challenge_risk.ps1 -Accept` 做全局一次确认并持久记住，不需要逐源确认。
+- 桌面产品可通过 `scripts/confirm_challenge_risk.ps1 -Revoke` 撤销全局确认。
+- 企业托管部署可通过 `POST_LOAN_HIGH_RISK_AUTO_ACK=1` 或 `POST_LOAN_RISK_CONSENT_FILE` 做集中化确认。
+- 未确认风险时：系统不会直接执行自动处理，会降级为托管或阻断，并写入 audit。
+
+这样保持默认安全，同时不限制高级用户在合法授权环境中的部署自由度。

@@ -1,24 +1,36 @@
 {
+  "_comment": "Product defaults: normal public/authorized/internal sources use auto; judicial/government strong-risk sources use assisted; abnormal/prohibited sources use blocked. Advanced users may override any source type or source id. If changing a safer default to auto, set riskAcknowledged=true after confirming authorization, compliance, and account-risk acceptance.",
+  "public": {
+    "mode": "auto",
+    "risk": "low",
+    "allowOcr": true,
+    "allowSessionReuse": true,
+    "allowAssisted": true,
+    "allowRetry": true
+  },
   "public-low-risk": {
     "mode": "auto",
     "risk": "low",
     "allowOcr": true,
     "allowSessionReuse": true,
-    "allowAssisted": true
+    "allowAssisted": true,
+    "allowRetry": true
   },
   "authorized": {
     "mode": "auto",
     "risk": "low",
     "allowOcr": true,
     "allowSessionReuse": true,
-    "allowAssisted": true
+    "allowAssisted": true,
+    "allowRetry": true
   },
   "search-engine": {
-    "mode": "blocked",
-    "risk": "standard",
+    "mode": "auto",
+    "risk": "low",
     "allowOcr": false,
     "allowSessionReuse": false,
     "allowAssisted": false,
+    "allowRetry": true,
     "cooldownOnChallenge": true
   },
   "judicial": {
@@ -27,5 +39,23 @@
     "allowOcr": false,
     "allowSessionReuse": true,
     "allowAssisted": true
+  },
+  "search:bing": {
+    "mode": "assisted",
+    "risk": "standard",
+    "allowOcr": false,
+    "allowSessionReuse": false,
+    "allowAssisted": true,
+    "riskAcknowledged": true,
+    "note": "Example source-level override. Source ids can be found in audit logs."
+  },
+  "judicial:example-authorized-test": {
+    "mode": "auto",
+    "risk": "high",
+    "allowOcr": true,
+    "allowSessionReuse": true,
+    "allowAssisted": true,
+    "riskAcknowledged": true,
+    "note": "Example only. Use auto for high-risk sources only when the user confirms authorization and compliance responsibility."
   }
 }

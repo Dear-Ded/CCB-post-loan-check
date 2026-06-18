@@ -92,19 +92,68 @@ $env:POST_LOAN_OUTPUT_ROOT = "D:\reports"
 项目内置挑战处理引擎，目标是达到企业级 RPA/数据接入框架的产品形态：
 
 - 统一识别登录页、验证码页、人机验证页、频控页、安全网关和空白异常页。
-- 低风险授权场景可开启 OCR 自动处理。
+- 普通公开、授权、内部数据源默认 `auto`，OCR、自动填充、自动重试开箱即用。
 - 司法、政务、强风控门户默认托管处理，系统填主体，用户完成登录/验证码，系统继续跑。
 - 禁止或异常风险场景自动阻断、冷却和审计。
 - 所有挑战处理决策写入 audit，避免黑盒行为。
 
-低风险 OCR 默认关闭，可按合规场景开启：
+低风险 OCR 默认开启；如部署环境要求更保守，可关闭：
 
 ```powershell
-$env:POST_LOAN_ENABLE_LOW_RISK_OCR = "1"
+$env:POST_LOAN_ENABLE_LOW_RISK_OCR = "0"
+```
+
+司法、政务、强风控站点默认仍为托管处理。如果高级用户或企业部署希望把这些来源改为 `auto`，首次使用前执行一次全局风险确认，之后不再按源反复提示：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\core-skill\scripts\confirm_challenge_risk.ps1 -Accept
+```
+
+撤销确认：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\core-skill\scripts\confirm_challenge_risk.ps1 -Revoke
+```
+
+自定义策略文件：
+
+```powershell
 $env:POST_LOAN_CHALLENGE_POLICY = ".\packages\core-skill\references\challenge-policy.example.json"
 ```
 
 更完整的调研与路线见 `CHALLENGE_ENGINE_RESEARCH.md`。
+
+### 用户自定义策略
+
+系统默认三档是开箱即用策略，高级用户可以按数据源类型或具体数据源覆盖：
+
+- 把某个来源从 `assisted` 改成 `auto`
+- 把某个来源从 `auto` 改成 `blocked`
+- 为某个来源单独开启/关闭 OCR、会话复用、托管处理
+
+策略文件示例：
+
+```json
+{
+  "judicial": {
+    "mode": "assisted",
+    "risk": "high",
+    "allowOcr": false,
+    "allowSessionReuse": true,
+    "allowAssisted": true
+  },
+  "search:bing": {
+    "mode": "assisted",
+    "risk": "standard",
+    "allowAssisted": true,
+    "riskAcknowledged": true
+  }
+}
+```
+
+如果把更安全的默认档位调整为 `auto`，可以在策略文件写入 `riskAcknowledged: true`，也可以使用上面的全局一次确认。系统会把该决策写入审计日志；未确认时会降级为托管或阻断处理。
+
+企业托管部署也可设置 `POST_LOAN_HIGH_RISK_AUTO_ACK=1` 或指定 `POST_LOAN_RISK_CONSENT_FILE`，用于集中化确认和审计。
 
 ## 质量规则
 

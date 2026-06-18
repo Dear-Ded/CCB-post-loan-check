@@ -15,6 +15,7 @@
     "scripts/capture_portals.js",
     "scripts/build_report.py",
     "scripts/preflight_workbuddy.ps1",
+    "scripts/confirm_challenge_risk.ps1",
     "scripts/framework/audit.js",
     "scripts/framework/challenge_detector.js",
     "scripts/framework/challenge_engine.js",

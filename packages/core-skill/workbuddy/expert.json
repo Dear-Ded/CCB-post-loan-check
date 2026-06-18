@@ -59,10 +59,12 @@
     "preferBackground": true,
     "foregroundOnlyFor": ["court-login", "captcha"],
     "persistentBrowserProfile": true,
-    "rejectInvalidScreenshots": true,
-    "dynamicScreenshotCount": true,
-    "captchaBypass": false
-  },
+      "rejectInvalidScreenshots": true,
+      "dynamicScreenshotCount": true,
+      "normalPublicSourcesDefaultAuto": true,
+      "lowRiskOcrDefaultEnabled": true,
+      "highRiskAutoRequiresFirstUseConsent": true
+    },
   "outputs": {
     "defaultRoot": "%USERPROFILE%\\Documents\\CCB贷前贷后查询\\outputs",
     "filePattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",

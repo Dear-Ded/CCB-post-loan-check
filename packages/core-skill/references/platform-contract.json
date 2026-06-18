@@ -70,11 +70,11 @@
     "批量查询最终只向用户展示 reports 文件夹，截图和审计留在 evidence。"
   ],
   "challengeHandling": {
-    "defaultPosture": "safe-by-default",
+    "defaultPosture": "productive-by-default-and-safe-for-strong-risk",
     "tiers": [
       {
         "name": "auto",
-        "scope": "内部系统、授权系统、低风险公开源",
+        "scope": "普通公开数据源、内部系统、授权系统、低风险公开源",
         "capabilities": ["登录态复用", "低风险 OCR", "自动填充提交", "自动重试", "结果校验"]
       },
       {
@@ -89,8 +89,22 @@
       }
     ],
     "switches": {
-      "POST_LOAN_ENABLE_LOW_RISK_OCR": "低风险 OCR 总开关，默认关闭。",
+      "POST_LOAN_ENABLE_LOW_RISK_OCR": "低风险 OCR 总开关，默认开启；设置为 0 可关闭。",
       "POST_LOAN_CHALLENGE_POLICY": "来源分级和挑战处理策略文件。"
+    },
+    "userOverrides": {
+      "enabled": true,
+      "scope": "按数据源类型或具体数据源 ID 覆盖处理档位。",
+      "allowedChanges": [
+        "auto -> assisted",
+        "auto -> blocked",
+        "assisted -> auto",
+        "assisted -> blocked",
+        "blocked -> assisted",
+        "blocked -> auto"
+      ],
+      "riskAcknowledgement": "当用户把更安全的默认档位提升为 auto 时，可在策略中写入 riskAcknowledged=true，或完成一次全局风险确认；否则系统降级为托管或阻断并写入 audit。",
+      "responsibility": "高级用户调整策略前应确认授权、合规要求和账号风险。"
     }
   },
   "platforms": {

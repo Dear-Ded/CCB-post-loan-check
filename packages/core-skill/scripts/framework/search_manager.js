@@ -97,8 +97,7 @@ class SearchManager {
           const snapshot = await this.challengeEngine.inspectPage(searchPage, {
             sourceId,
             sourceType: "search-engine",
-            sourceName: engine.name,
-            mode: "blocked"
+            sourceName: engine.name
           });
           const text = snapshot.text;
           const challenge = snapshot.challenge;
@@ -139,8 +138,7 @@ class SearchManager {
             const snapshot = await this.challengeEngine.inspectPage(searchPage, {
               sourceId,
               sourceType: "search-engine",
-              sourceName: engine.name,
-              mode: "blocked"
+              sourceName: engine.name
             });
             if (snapshot.challenge.kind !== "none" || !engine.validUrl(searchPage.url())) {
               blocked = true;

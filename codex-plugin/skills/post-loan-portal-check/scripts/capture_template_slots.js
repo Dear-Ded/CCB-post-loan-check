@@ -1318,6 +1318,7 @@ async function main() {
   const judicialPolicy = new JudicialSourcePolicy({ mode: judicialMode, audit });
   const challengeEngine = new ChallengeEngine({
     audit,
+    policyFile: investigationMode.challengePolicyFile || process.env.POST_LOAN_CHALLENGE_POLICY,
     allowLowRiskImageTextRecognition: Boolean(investigationMode.lowRiskOcr && runtimePolicy.lowRiskImageTextRecognition.enabled) || envFlag("POST_LOAN_ENABLE_LOW_RISK_IMAGE_TEXT", false),
     pythonExe,
     imageTextHelperPath: path.join(__dirname, "optional_image_text_recognition_provider.py"),

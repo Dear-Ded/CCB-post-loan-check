@@ -33,6 +33,9 @@ assertContains("LOAD_THIS_PROJECT.md", repoUrl);
 assertContains("README.md", repoUrl);
 assertContains("PLATFORM_DISCOVERY.md", repoUrl);
 assertContains("index.html", repoUrl);
+assertContains("LOAD_THIS_PROJECT.md", "npm run mode:fast");
+assertContains("README.md", "npm run mode:fast");
+assertContains("packages/core-skill/SKILL.md", "npm run mode:fast");
 
 for (const file of [
   "LOAD_THIS_PROJECT.md",
@@ -49,6 +52,8 @@ for (const file of [
 }
 
 const platformContract = parseJson("packages/core-skill/references/platform-contract.json");
+const packageJson = parseJson("package.json");
+assert(packageJson.scripts["mode:fast"] === "node tools/enable-fast-mode.js --accept", "package must expose one-click fast mode");
 assert(platformContract.discoveryContract.repositoryUrl === repoUrl, "platform contract must point to the public repository");
 assert(platformContract.discoveryContract.primaryLoadFile === "LOAD_THIS_PROJECT.md", "platform contract must name the load file");
 assert(platformContract.platforms.workbuddy.mobileSupport === "unsupported", "WorkBuddy mobile must remain unsupported");

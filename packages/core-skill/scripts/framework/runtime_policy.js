@@ -8,6 +8,7 @@ function envFlag(name, fallback = false) {
 }
 
 function loadRuntimePolicy({ skillRoot = path.resolve(__dirname, "..", ".."), file = process.env.POST_LOAN_RUNTIME_POLICY, audit, investigationMode } = {}) {
+  const configuredFile = file || investigationMode?.runtimePolicyFile || "";
   const defaults = {
     browserCompatibilityTuning: {
       enabled: envFlag("POST_LOAN_BROWSER_COMPAT_TUNING", false),
@@ -22,7 +23,7 @@ function loadRuntimePolicy({ skillRoot = path.resolve(__dirname, "..", ".."), fi
     }
   };
 
-  const policyFile = file || path.join(skillRoot, "references", "runtime-policy.example.json");
+  const policyFile = configuredFile || path.join(skillRoot, "references", "runtime-policy.example.json");
   try {
     if (!fs.existsSync(policyFile)) return defaults;
     const payload = JSON.parse(fs.readFileSync(policyFile, "utf8").replace(/^\uFEFF/, ""));

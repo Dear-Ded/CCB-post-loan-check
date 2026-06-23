@@ -20,7 +20,7 @@ function defaultConsentFile() {
 }
 
 function defaultSettingsFile() {
-  return path.join(os.homedir(), ".codex", "post-loan-portal-check", "settings.json");
+  return process.env.POST_LOAN_SETTINGS_FILE || path.join(os.homedir(), ".codex", "post-loan-portal-check", "settings.json");
 }
 
 function readSettings(file = defaultSettingsFile()) {
@@ -199,6 +199,9 @@ function resolveInvestigationMode({ requestedMode, consentFile = process.env.POS
     consentAccepted: consent.accepted || envAccepted,
     consentFile,
     settingsMode: settings.investigationMode || "",
+    fastModeEnabled: Boolean(settings.fastModeEnabled),
+    runtimePolicyFile: settings.runtimePolicyFile || "",
+    challengePolicyFile: settings.challengePolicyFile || "",
     consentRequired: privilegedRequested && !privilegedEnabled
   };
 }

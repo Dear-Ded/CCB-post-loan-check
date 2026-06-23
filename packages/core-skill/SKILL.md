@@ -21,6 +21,14 @@ After startup, do not ask the user to come back and say done. The scripts detect
 
 ## Commands
 
+One-click fast mode, when the user explicitly asks for 极速模式 / fastest mode / success-first mode:
+
+```bash
+npm run mode:fast
+```
+
+This writes local consent plus expert retry/session/browser-compatibility settings. Real evidence validation and managed confirmation for strong official-source challenges remain enabled.
+
 Single company:
 
 ```powershell

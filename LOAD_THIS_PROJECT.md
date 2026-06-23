@@ -15,6 +15,12 @@
 加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。
 ```
 
+极速模式：
+
+```text
+加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，先执行 npm run mode:fast 开启一键极速模式，然后给 XXX 公司生成贷后查询 Word 报告。
+```
+
 批量：
 
 ```text

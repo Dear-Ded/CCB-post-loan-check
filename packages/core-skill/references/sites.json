@@ -1,6 +1,255 @@
 {
   "defaultOutputRoot": "%USERPROFILE%\\Documents\\CCB贷前贷后查询\\outputs",
   "templateDocx": "assets/贷后查询模板.docx",
+  "dataSourceConfig": {
+    "customConfigEnv": "POST_LOAN_DATA_SOURCES",
+    "legacyCustomConfigEnv": "POST_LOAN_DATA_SOURCES",
+    "healthCheckDefault": true,
+    "disableHealthCheckEnv": "POST_LOAN_DISABLE_SOURCE_HEALTHCHECK",
+    "legacyDisableHealthCheckEnv": "POST_LOAN_DISABLE_SOURCE_HEALTHCHECK",
+    "normalizedSchema": "subject-intelligence/v0",
+    "supportedAuthTypes": ["none", "api-key", "bearer", "basic", "hmac"],
+    "admissionPolicy": {
+      "defaultEnabled": "Public no-credential sources are enabled by default.",
+      "credentialed": "Credentialed sources are supported by configuration, but stay disabled until the deployer supplies credentials and accepts the source risk.",
+      "challengeHandling": "Detect, audit, assisted handoff, or configured provider slot. Managed sources keep user authorization and result validation in the loop."
+    }
+  },
+  "dataSources": [
+    {
+      "id": "wikidata_entity_search",
+      "name": "Wikidata 实体搜索",
+      "type": "osint-api",
+      "category": "entity-knowledge",
+      "dataCategory": "public-knowledge-graph",
+      "delivery": "public-http-api",
+      "enabled": true,
+      "defaultEnabled": true,
+      "admissionClass": "public-no-credential",
+      "publicAccess": true,
+      "requiresCredential": false,
+      "endpoint": "https://www.wikidata.org/w/api.php",
+      "healthUrl": "https://www.wikidata.org/w/api.php?action=query&meta=siteinfo&format=json",
+      "queryParam": "search",
+      "queryParams": {
+        "action": "wbsearchentities",
+        "language": "zh",
+        "format": "json"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "resultMapping": {
+        "recordsPath": "search",
+        "titlePath": "label",
+        "summaryPath": "description",
+        "urlPath": "concepturi",
+        "relatedSubjectsPath": "aliases"
+      },
+      "tags": ["osint-framework-inspired", "public-api", "entity", "graph"]
+    },
+    {
+      "id": "gleif_lei_records",
+      "name": "GLEIF 全球法人识别码",
+      "type": "osint-api",
+      "category": "business-registry",
+      "dataCategory": "legal-entity",
+      "delivery": "public-http-api",
+      "enabled": true,
+      "defaultEnabled": true,
+      "admissionClass": "public-no-credential",
+      "publicAccess": true,
+      "requiresCredential": false,
+      "endpoint": "https://api.gleif.org/api/v1/lei-records",
+      "healthUrl": "https://api.gleif.org/api/v1/lei-records?page[size]=1",
+      "queryParam": "filter[entity.names]",
+      "auth": {
+        "type": "none"
+      },
+      "resultMapping": {
+        "recordsPath": "data",
+        "titlePath": "attributes.entity.legalName.name",
+        "summaryPath": "attributes.entity",
+        "urlPath": "links.self"
+      },
+      "tags": ["spiderfoot-inspired", "public-api", "company", "lei"]
+    },
+    {
+      "id": "gdelt_doc_news",
+      "name": "GDELT 全球新闻事件",
+      "type": "osint-api",
+      "category": "news-event",
+      "dataCategory": "public-news",
+      "delivery": "public-http-api",
+      "enabled": true,
+      "defaultEnabled": true,
+      "admissionClass": "public-no-credential",
+      "publicAccess": true,
+      "requiresCredential": false,
+      "endpoint": "https://api.gdeltproject.org/api/v2/doc/doc",
+      "healthUrl": "https://api.gdeltproject.org/api/v2/doc/doc?query=business&mode=artlist&format=json&maxrecords=1",
+      "queryParam": "query",
+      "queryParams": {
+        "mode": "artlist",
+        "format": "json",
+        "maxrecords": "10",
+        "sort": "hybridrel"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "resultMapping": {
+        "recordsPath": "articles",
+        "titlePath": "title",
+        "summaryPath": "seendate",
+        "urlPath": "url",
+        "publishedAtPath": "seendate",
+        "categoryPath": "sourcecountry"
+      },
+      "tags": ["public-api", "news", "risk-event", "monitoring"]
+    },
+    {
+      "id": "github_public_repository_search",
+      "name": "GitHub 公共仓库搜索",
+      "type": "osint-api",
+      "category": "public-code",
+      "dataCategory": "public-code-repository",
+      "delivery": "public-http-api",
+      "enabled": true,
+      "defaultEnabled": true,
+      "admissionClass": "public-no-credential",
+      "publicAccess": true,
+      "requiresCredential": false,
+      "endpoint": "https://api.github.com/search/repositories",
+      "healthUrl": "https://api.github.com/rate_limit",
+      "queryParam": "q",
+      "queryParams": {
+        "per_page": "5"
+      },
+      "headers": {
+        "accept": "application/vnd.github+json"
+      },
+      "auth": {
+        "type": "none"
+      },
+      "resultMapping": {
+        "recordsPath": "items",
+        "titlePath": "full_name",
+        "summaryPath": "description",
+        "urlPath": "html_url",
+        "publishedAtPath": "updated_at",
+        "valuePath": "stargazers_count"
+      },
+      "tags": ["public-api", "public-code", "company-footprint"]
+    },
+    {
+      "id": "opencorporates_web_search",
+      "name": "OpenCorporates 公开网页搜索",
+      "type": "public-web",
+      "category": "business-registry",
+      "dataCategory": "company-registry-web",
+      "delivery": "public-web",
+      "enabled": true,
+      "defaultEnabled": true,
+      "admissionClass": "public-no-credential",
+      "publicAccess": true,
+      "requiresCredential": false,
+      "endpoint": "https://opencorporates.com/companies?q={q}",
+      "healthUrl": "https://opencorporates.com/",
+      "auth": {
+        "type": "none"
+      },
+      "tags": ["spiderfoot-inspired", "public-web", "company", "registry"]
+    },
+    {
+      "id": "opensanctions_web_search",
+      "name": "OpenSanctions 公开网页搜索",
+      "type": "public-web",
+      "category": "sanctions-watchlist",
+      "dataCategory": "sanctions-pep-adverse-media",
+      "delivery": "public-web",
+      "enabled": true,
+      "defaultEnabled": true,
+      "admissionClass": "public-no-credential",
+      "publicAccess": true,
+      "requiresCredential": false,
+      "endpoint": "https://www.opensanctions.org/search/?q={q}",
+      "healthUrl": "https://www.opensanctions.org/",
+      "auth": {
+        "type": "none"
+      },
+      "tags": ["public-web", "sanctions", "pep", "risk-screening"]
+    },
+    {
+      "id": "custom_im_bot_template",
+      "name": "即时通讯公共服务 Provider 模板（默认关闭）",
+      "type": "im-bot",
+      "category": "external-provider",
+      "dataCategory": "user-configured-public-service",
+      "delivery": "instant-messaging-bot",
+      "enabled": false,
+      "defaultEnabled": false,
+      "admissionClass": "user-configured-provider",
+      "publicAccess": false,
+      "requiresCredential": false,
+      "requiresOperatorReview": true,
+      "riskNotice": "即时通讯 Bot 服务质量、来源、条款和数据边界差异很大。框架提供插槽和审计字段，但不把不透明 Bot 作为默认自动数据源。",
+      "auth": {
+        "type": "none"
+      },
+      "tags": ["template", "im-bot", "default-off", "operator-review"]
+    },
+    {
+      "id": "custom_public_api_template",
+      "name": "自定义公开 API 模板",
+      "type": "http-api",
+      "enabled": false,
+      "defaultEnabled": false,
+      "admissionClass": "custom",
+      "publicAccess": true,
+      "requiresCredential": false,
+      "endpoint": "https://example.com/search",
+      "queryParam": "q",
+      "auth": {
+        "type": "none"
+      },
+      "resultMapping": {
+        "recordsPath": "items",
+        "titlePath": "title",
+        "summaryPath": "summary",
+        "urlPath": "url",
+        "publishedAtPath": "publishedAt",
+        "relatedSubjectsPath": "relatedSubjects"
+      },
+      "tags": ["template", "public-api"]
+    },
+    {
+      "id": "custom_credentialed_api_template",
+      "name": "自定义授权 API 模板（默认关闭）",
+      "type": "http-api",
+      "enabled": false,
+      "defaultEnabled": false,
+      "admissionClass": "credentialed-user-configured",
+      "publicAccess": false,
+      "requiresCredential": true,
+      "endpoint": "https://example.com/authorized-search",
+      "queryParam": "q",
+      "auth": {
+        "type": "bearer",
+        "env": "POST_LOAN_EXAMPLE_BEARER_TOKEN"
+      },
+      "resultMapping": {
+        "recordsPath": "items",
+        "titlePath": "title",
+        "summaryPath": "summary",
+        "urlPath": "url",
+        "publishedAtPath": "publishedAt",
+        "relatedSubjectsPath": "relatedSubjects"
+      },
+      "riskNotice": "需要部署者确认授权、账号条款、数据使用边界后再开启。",
+      "tags": ["template", "credentialed", "default-off"]
+    }
+  ],
   "targets": [
     {
       "id": "henan_emergency",

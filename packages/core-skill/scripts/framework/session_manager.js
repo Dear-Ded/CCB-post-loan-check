@@ -14,7 +14,7 @@ class SessionManager {
   }
 
   statePath(scope) {
-    return path.join(this.profilePath(scope), "post-loan-session-state.json");
+    return path.join(this.profilePath(scope), "ccb-post-loan-session-state.json");
   }
 
   readState(scope) {

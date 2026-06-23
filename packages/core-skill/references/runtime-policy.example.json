@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "runtime-policy/v1",
+  "browserCompatibilityTuning": {
+    "enabled": false,
+    "description": "Browser automation testing and compatibility tuning parameters. Disabled by default; enable only in controlled private deployments.",
+    "chromiumArgs": []
+  },
+  "lowRiskImageTextRecognition": {
+    "enabled": false,
+    "description": "Authorized low-risk image text recognition. Source-level use is controlled by challenge-policy.example.json and centralized guardrails.",
+    "provider": "optional-local-component"
+  },
+  "sessionStorage": {
+    "localOnly": true,
+    "description": "User session data stays on the local machine and is not uploaded to any server."
+  }
+}

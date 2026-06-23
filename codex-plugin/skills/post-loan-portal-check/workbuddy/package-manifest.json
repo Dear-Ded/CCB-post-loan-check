@@ -1,9 +1,17 @@
 {
-  "id": "post-loan-portal-check",
-  "name": "贷后门户查询",
-  "version": "0.1.0",
-  "entrypoint": "workbuddy/run_workbuddy.ps1",
-  "preflight": "scripts/preflight_workbuddy.ps1",
+  "id": "ccb-post-loan",
+  "name": "CCB贷前贷后查询",
+  "version": "0.5.0",
+  "desktopEntrypoint": "workbuddy/run_workbuddy.ps1",
+  "mobileEntrypoint": "workbuddy/run_workbuddy.sh",
+  "entrypoints": {
+    "desktopWindows": "workbuddy/run_workbuddy.ps1",
+    "mobileLinux": "workbuddy/run_workbuddy.sh"
+  },
+  "preflight": {
+    "desktopWindows": "scripts/preflight_workbuddy.ps1",
+    "mobileLinux": "packages/doubao/preflight_doubao_app.sh"
+  },
   "expertConfig": "workbuddy/expert.json",
   "requiredFiles": [
     "SKILL.md",
@@ -15,38 +23,52 @@
     "scripts/capture_portals.js",
     "scripts/build_report.py",
     "scripts/preflight_workbuddy.ps1",
-    "scripts/confirm_challenge_risk.ps1",
     "scripts/framework/audit.js",
+    "scripts/framework/authorized_judicial_provider.js",
     "scripts/framework/challenge_detector.js",
     "scripts/framework/challenge_engine.js",
     "scripts/framework/challenge_policy.js",
     "scripts/framework/enforcement_source.js",
+    "scripts/framework/evidence_contract.js",
+    "scripts/framework/investigation_mode.js",
+    "scripts/framework/judicial_diagnostics.js",
     "scripts/framework/judicial_sources.js",
+    "scripts/framework/judicial_routes.js",
+    "scripts/framework/judicial_run_scheduler.js",
     "scripts/framework/ocr_solver.js",
     "scripts/framework/profile_manager.js",
+    "scripts/framework/retry_plan.js",
+    "scripts/framework/runtime_policy.js",
     "scripts/framework/search_manager.js",
     "scripts/framework/session_manager.js",
     "scripts/framework/source_state_store.js",
     "scripts/framework/task_queue.js",
+    "scripts/repair_required_evidence.js",
     "references/sites.json",
     "references/challenge-policy.example.json",
+    "references/runtime-policy.example.json",
     "references/platform-contract.json",
     "references/workbuddy-adapter.md",
     "references/workbuddy-expert.json",
     "workbuddy/expert.json",
-    "workbuddy/run_workbuddy.ps1"
+    "workbuddy/run_workbuddy.ps1",
+    "workbuddy/run_workbuddy.sh"
   ],
+  "platformRules": {
+    "desktopWindows": "Use PowerShell runner. Do not call bash-only entrypoints.",
+    "mobileLinux": "Use bash runner. Do not call PowerShell or Windows paths."
+  },
   "userInteraction": {
     "startupOnly": true,
     "requiredActions": [
-      "登录中国裁判文书网",
-      "输入中国执行信息公开网验证码",
-      "如同步查询个人，被执行查询页按人分别输入验证码"
+      "必要时登录中国裁判文书网",
+      "必要时完成中国执行信息公开网页面确认",
+      "同步查询个人时，被执行查询页按人分别完成页面确认"
     ]
   },
   "knownLimits": [
-    "不绕过验证码或登录。",
-    "司法和搜索引擎站点可能触发风控，需要用户在启动阶段完成验证。",
-    "企业代码自动查询受搜索结果和安全验证影响；不确定时要求用户在启动阶段补充。"
+    "正式交付必须包含司法和执行结果证据或明确缺口。",
+    "不得生成模拟报告、样例截图或编造数据。",
+    "企业代码自动查询受公开结果影响；不确定时要求补充。"
   ]
 }

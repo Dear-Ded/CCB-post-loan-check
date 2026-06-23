@@ -16,6 +16,10 @@ def safe_filename(value: str) -> str:
     return value.strip()[:120]
 
 
+def text_from_codepoints(*codepoints: int) -> str:
+    return "".join(chr(item) for item in codepoints)
+
+
 def normalize_to_template_png(src: Path, size=(1268, 755)) -> bytes:
     img = Image.open(src).convert("RGB")
     if img.size != size:
@@ -51,9 +55,6 @@ def build_by_replacing_template_media(template_path: Path, manifest: dict, outpu
     if not screenshots:
         raise SystemExit("No screenshots found in manifest")
 
-    # Extend template media slots for dynamic complete screenshots.
-    # Existing template has 12 image placeholders. If the run needs more, append
-    # extra paragraphs by cloning the last drawing paragraph and wiring new media.
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(template_path, "r") as zin:
         all_files = {item.filename: zin.read(item.filename) for item in zin.infolist()}
@@ -68,13 +69,11 @@ def build_by_replacing_template_media(template_path: Path, manifest: dict, outpu
         extra_count = len(screenshots) - len(media_names)
         doc_xml = etree.fromstring(all_files["word/document.xml"])
         rels_xml = etree.fromstring(all_files["word/_rels/document.xml.rels"])
-        content_xml = etree.fromstring(all_files["[Content_Types].xml"])
         ns = {
             "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
             "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
             "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
             "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
-            "ct": "http://schemas.openxmlformats.org/package/2006/content-types"
         }
         body = doc_xml.find("w:body", ns)
         sect_pr = body.find("w:sectPr", ns)
@@ -131,7 +130,7 @@ def main():
     args = parser.parse_args()
 
     manifest_path = Path(args.manifest)
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     bad_targets = [
         t for t in manifest.get("targets", [])
         if (not t.get("ok")) or bool(t.get("suspicious"))
@@ -150,14 +149,24 @@ def main():
             for item in bad_screenshots
         )
         raise SystemExit(f"Refusing to build final report because these screenshots failed validation: {names}. {details}")
+    required_evidence = manifest.get("requiredEvidence") or {}
+    if required_evidence and not required_evidence.get("ok", False) and not args.allow_unverified:
+        missing = required_evidence.get("missingRequired") or []
+        details = "; ".join(
+            f"{item.get('id', 'unknown')}: {item.get('missingReason', '')}"
+            for item in missing
+        )
+        raise SystemExit(f"Refusing to build final report because required evidence is incomplete: {details}")
 
     skill_root = Path(os.environ.get("POST_LOAN_SKILL_ROOT", Path(__file__).resolve().parents[1]))
-    template_path = Path(args.template) if args.template else skill_root / "assets" / "贷后查询模板.docx"
+    default_template_name = text_from_codepoints(36151, 21518, 26597, 35810, 27169, 26495) + ".docx"
+    default_report_prefix = text_from_codepoints(36151, 21518, 26597, 35810)
+    template_path = Path(args.template) if args.template else skill_root / "assets" / default_template_name
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")
 
     date_str = datetime.now().strftime("%Y%m%d")
-    output_path = Path(args.out) if args.out else manifest_path.parent / f"贷后查询-{safe_filename(manifest['company'])}-{date_str}.docx"
+    output_path = Path(args.out) if args.out else manifest_path.parent / f"{default_report_prefix}-{safe_filename(manifest['company'])}-{date_str}.docx"
     build_by_replacing_template_media(template_path, manifest, output_path)
 
     manifest["reportDocx"] = str(output_path)

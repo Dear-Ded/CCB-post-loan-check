@@ -4,15 +4,20 @@ param(
 
   [string]$OrgCode = "",
 
+  [string]$OutputRoot = "",
+
   [string[]]$Person = @(),
 
   [switch]$IncludeHealthCommission,
 
   [switch]$TemplateSlots,
 
-  [switch]$SkipJudicial,
-
   [switch]$SkipSearch,
+
+  [switch]$SmokeQuick,
+
+  [ValidateSet("standard", "enhanced", "deep", "expert")]
+  [string]$Mode = "",
 
   [ValidateSet("auto", "assisted", "blocked")]
   [string]$JudicialMode = "assisted",
@@ -24,23 +29,25 @@ param(
   [switch]$NoPrompt
 )
 
-$runner = Join-Path $PSScriptRoot "packages\core-skill\scripts\run_post_loan_check.ps1"
-$argsList = @(
-  "-NoProfile",
-  "-ExecutionPolicy", "Bypass",
-  "-File", $runner,
-  "-CompanyName", $CompanyName,
-  "-ManualTimeoutSeconds", $ManualTimeoutSeconds
-)
+$Root = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+$runner = Join-Path $Root "packages\core-skill\scripts\run_post_loan_check.ps1"
+$parameters = @{
+  CompanyName = $CompanyName
+  ManualTimeoutSeconds = $ManualTimeoutSeconds
+}
 
-if (-not [string]::IsNullOrWhiteSpace($OrgCode)) { $argsList += @("-OrgCode", $OrgCode) }
-foreach ($p in $Person) { $argsList += @("-Person", $p) }
-if ($IncludeHealthCommission) { $argsList += "-IncludeHealthCommission" }
-if ($TemplateSlots) { $argsList += "-TemplateSlots" }
-if ($SkipJudicial) { $argsList += "-SkipJudicial" }
-if ($SkipSearch) { $argsList += "-SkipSearch" }
-if (-not [string]::IsNullOrWhiteSpace($JudicialMode)) { $argsList += @("-JudicialMode", $JudicialMode) }
-if ($Headless) { $argsList += "-Headless" }
-if ($NoPrompt) { $argsList += "-NoPrompt" }
+if (-not [string]::IsNullOrWhiteSpace($OrgCode)) { $parameters.OrgCode = $OrgCode }
+if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { $parameters.OutputRoot = $OutputRoot }
+if ($Person.Count -gt 0) { $parameters.Person = $Person }
+if ($IncludeHealthCommission) { $parameters.IncludeHealthCommission = $true }
+if ($TemplateSlots) { $parameters.TemplateSlots = $true }
+if ($SkipSearch) { $parameters.SkipSearch = $true }
+if ($SmokeQuick) { $parameters.SmokeQuick = $true }
+if (-not [string]::IsNullOrWhiteSpace($Mode)) { $parameters.Mode = $Mode }
+if (-not [string]::IsNullOrWhiteSpace($JudicialMode)) { $parameters.JudicialMode = $JudicialMode }
+if ($Headless) { $parameters.Headless = $true }
+if ($NoPrompt) { $parameters.NoPrompt = $true }
 
-& powershell.exe @argsList
+$scriptText = Get-Content -Raw -LiteralPath $runner
+$scriptBlock = [scriptblock]::Create($scriptText)
+& $scriptBlock @parameters

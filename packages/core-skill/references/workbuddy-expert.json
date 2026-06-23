@@ -1,59 +1,24 @@
 {
-  "id": "post-loan-portal-check",
-  "displayName": "贷后门户查询",
-  "description": "输入企业名称后，自动查询固定外部门户、截取完整结果页，并按模板生成 Word 报告。",
+  "id": "ccb-post-loan",
+  "displayName": "CCB贷前贷后查询",
+  "description": "输入企业名称后，查询贷前贷后外部门户信息，校验真实截图证据并生成 Word 报告。",
   "audience": "nonTechnical",
-  "inputs": [
-    {
-      "name": "companyName",
-      "label": "企业名称",
-      "type": "text",
-      "required": true
-    },
-    {
-      "name": "orgCode",
-      "label": "统一社会信用代码/组织机构代码",
-      "type": "text",
-      "required": false,
-      "help": "不填时自动查询，只有查不到或不确定时才提示补充。"
-    },
-    {
-      "name": "includeHealthCommission",
-      "label": "是否医院/医疗机构",
-      "type": "boolean",
-      "default": false
-    },
-    {
-      "name": "includePersons",
-      "label": "是否同步查询法人/实控人被执行信息",
-      "type": "boolean",
-      "default": false
-    },
-    {
-      "name": "persons",
-      "label": "个人查询名单",
-      "type": "array",
-      "requiredWhen": "includePersons=true",
-      "itemFields": [
-        { "name": "name", "label": "姓名", "type": "text", "required": true },
-        { "name": "idNumber", "label": "身份证号", "type": "text", "required": true }
-      ]
-    }
+  "desktopEntrypoint": "workbuddy/run_workbuddy.ps1",
+  "mobileEntrypoint": "workbuddy/run_workbuddy.sh",
+  "desktopOs": "Windows",
+  "mobileOs": "Linux",
+  "defaultMode": "enhanced",
+  "modes": [
+    { "value": "standard", "label": "标准模式", "description": "安全稳定，适合普通查询。" },
+    { "value": "enhanced", "label": "增强模式", "description": "默认推荐，平衡成功率、性能与合规护栏。" },
+    { "value": "deep", "label": "深度模式", "description": "更强查询覆盖、会话复用、重试和关联主体补查。" },
+    { "value": "expert", "label": "专家模式", "description": "成功率优先的最积极可审计配置，需确认风险说明。" }
   ],
-  "startupNotice": [
-    "我会打开浏览器并预填查询信息。",
-    "请登录中国裁判文书网。",
-    "请在每个中国执行信息公开网页面只输入验证码。",
-    "完成后不用回到聊天窗口，我会自动继续生成报告。"
-  ],
-  "commandTemplate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{skillRoot}\\scripts\\run_post_loan_check.ps1\" -CompanyName \"{companyName}\" {orgCodeArg} {personArgs} {healthArg} -TemplateSlots",
-  "preflightCommand": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{skillRoot}\\scripts\\preflight_workbuddy.ps1\" -Json",
-  "outputPattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",
-  "rules": {
-    "personalSearchScope": "execution-only",
-    "captchaBypass": false,
-    "dynamicScreenshotCount": true,
-    "rejectInvalidScreenshots": true,
-    "startupOnlyUserInteraction": true
-  }
+  "rules": [
+    "电脑端使用 Windows PowerShell 入口。",
+    "手机端使用 Linux bash 入口。",
+    "不得模拟。",
+    "不得生成样例报告或编造数据。",
+    "失败必须返回真实失败原因、补证清单或可重试状态。"
+  ]
 }

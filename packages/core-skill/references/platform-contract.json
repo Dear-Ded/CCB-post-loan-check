@@ -1,6 +1,7 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "productName": "CCB贷前贷后查询",
+  "version": "0.5.0",
   "productPrinciple": "跨平台一致：易搜索、易加载、一句话触发、输出质量稳定可靠。",
   "discoveryContract": {
     "repositoryUrl": "https://github.com/Dear-Ded/CCB-",
@@ -19,48 +20,18 @@
   },
   "inputContract": {
     "single": {
-      "companyName": {
-        "type": "string",
-        "required": true,
-        "description": "企业名称。用户只会输入这个也必须能启动。"
-      },
-      "orgCode": {
-        "type": "string",
-        "required": false,
-        "description": "统一社会信用代码/组织机构代码。不填时系统尽力自动查询；不确定时才提示补充。"
-      },
-      "legalRepresentativeName": {
-        "type": "string",
-        "required": false,
-        "description": "法人姓名。只有用户要求同步个人被执行信息时使用。"
-      },
-      "actualControllerName": {
-        "type": "string",
-        "required": false,
-        "description": "实控人姓名。只有用户要求同步个人被执行信息时使用。"
-      },
-      "personIdNumbers": {
-        "type": "array",
-        "required": false,
-        "description": "个人被执行查询需要身份证号；平台不得臆造。"
-      },
-      "includeHealthCommission": {
-        "type": "boolean",
-        "default": "auto",
-        "description": "医院/医疗机构自动开启；其他主体默认关闭。"
-      }
+      "companyName": { "type": "string", "required": true, "description": "企业名称。用户只输入这个也必须能启动。" },
+      "orgCode": { "type": "string", "required": false, "description": "统一社会信用代码/组织机构代码。不填时系统尽力查询；不确定时提示补充。" },
+      "mode": { "type": "enum", "values": ["standard", "enhanced", "deep", "expert"], "default": "enhanced", "description": "查询模式。跨平台入口必须原样传入同一核心执行器。" },
+      "legalRepresentativeName": { "type": "string", "required": false, "description": "仅在用户要求同步个人被执行信息时使用。" },
+      "actualControllerName": { "type": "string", "required": false, "description": "仅在用户要求同步个人被执行信息时使用。" },
+      "personChecks": { "type": "array", "required": false, "itemFormat": "姓名|身份证号", "description": "个人被执行查询对象；只支持单家企业任务，平台不得臆造姓名或身份证号。" },
+      "personIdNumbers": { "type": "array", "required": false, "description": "个人被执行查询需要身份证号；平台不得臆造。" },
+      "includeHealthCommission": { "type": "boolean", "default": "auto", "description": "医院/医疗机构自动开启；其他主体默认关闭。" }
     },
     "batch": {
-      "companies": {
-        "type": "array",
-        "required": true,
-        "description": "企业名称列表。支持用户粘贴中文顿号、逗号、换行分隔的名单。"
-      },
-      "orgCodes": {
-        "type": "array",
-        "required": false,
-        "description": "与企业列表同顺序对应；缺失项允许为空。"
-      }
+      "companies": { "type": "array", "required": true, "description": "企业名称列表。支持中文顿号、逗号、换行分隔。" },
+      "orgCodes": { "type": "array", "required": false, "description": "与企业列表同顺序对应；缺失项允许为空。" }
     }
   },
   "outputContract": {
@@ -69,79 +40,20 @@
     "batchReportsFolder": "reports",
     "batchEvidenceFolder": "evidence",
     "summaryFile": "batch-summary.json",
-    "mustContain": [
-      "Word报告",
-      "截图证据",
-      "查询URL",
-      "查询时间",
-      "结果页校验状态",
-      "失败原因审计"
-    ]
+    "manifestFile": "template-slots-manifest.json",
+    "mustContain": ["Word报告", "截图证据", "查询URL", "查询时间", "结果页校验状态", "失败原因审计"]
   },
   "qualityRules": [
-    "不能把登录页、验证码页、异常页、空白页作为结果页。",
-    "执行公开网必须确认结果/无结果状态后才截图。",
-    "搜索引擎必须同一搜索源前三页完整可用才输出，不输出半截搜索证据。",
+    "不能把登录页、挑战项页、异常页、空白页作为结果页。",
+    "执行信息公开网必须确认结果/无结果状态后才能截图。",
+    "裁判文书网必须确认已按主体搜索或明确无结果后才能截图。",
+    "搜索引擎必须只使用完整主体名称查询，同一搜索源前三页完整可用才输出。",
     "医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切省级。",
     "批量查询最终只向用户展示 reports 文件夹，截图和审计留在 evidence。"
   ],
-  "challengeHandling": {
-    "defaultPosture": "productive-by-default-and-safe-for-strong-risk",
-    "tiers": [
-      {
-        "name": "auto",
-        "scope": "普通公开数据源、内部系统、授权系统、低风险公开源",
-        "capabilities": ["登录态复用", "低风险 OCR", "自动填充提交", "自动重试", "结果校验"]
-      },
-      {
-        "name": "assisted",
-        "scope": "司法门户、政务门户、强风控站点",
-        "capabilities": ["自动打开页面", "自动填写主体", "用户完成登录或验证码", "系统继续执行", "审计留痕"]
-      },
-      {
-        "name": "blocked",
-        "scope": "明确禁止自动化、异常风控、账号风险",
-        "capabilities": ["阻断当前源", "记录失败原因", "冷却熔断", "继续批量其他任务"]
-      }
-    ],
-    "switches": {
-      "POST_LOAN_ENABLE_LOW_RISK_OCR": "低风险 OCR 总开关，默认开启；设置为 0 可关闭。",
-      "POST_LOAN_CHALLENGE_POLICY": "来源分级和挑战处理策略文件。"
-    },
-    "userOverrides": {
-      "enabled": true,
-      "scope": "按数据源类型或具体数据源 ID 覆盖处理档位。",
-      "allowedChanges": [
-        "auto -> assisted",
-        "auto -> blocked",
-        "assisted -> auto",
-        "assisted -> blocked",
-        "blocked -> assisted",
-        "blocked -> auto"
-      ],
-      "riskAcknowledgement": "当用户把更安全的默认档位提升为 auto 时，可在策略中写入 riskAcknowledged=true，或完成一次全局风险确认；否则系统降级为托管或阻断并写入 audit。",
-      "responsibility": "高级用户调整策略前应确认授权、合规要求和账号风险。",
-      "enterprisePrivateProfile": "POST_LOAN_DEPLOYMENT_PROFILE=enterprise-private 且完成全局风险确认后，所有来源默认 auto；企业可按源降级为 assisted 或 blocked。"
-    }
-  },
   "platforms": {
-    "codex": {
-      "mode": "local-plugin-skill",
-      "singleEntrypoint": "scripts/run_post_loan_check.ps1",
-      "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1"
-    },
-    "workbuddy": {
-      "mode": "skill-expert-expert-group",
-      "singleEntrypoint": "workbuddy/run_workbuddy.ps1",
-      "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1"
-    },
-    "doubao": {
-      "mode": "office-task-browser-agent",
-      "skillFile": "packages/doubao/SKILL.md",
-      "mobileTaskFile": "packages/doubao/mobile-task.md",
-      "linuxEntrypoint": "packages/doubao/run_doubao_app.sh",
-      "singleEntrypoint": "packages/doubao/run_doubao_app.sh --company",
-      "batchEntrypoint": "packages/doubao/run_doubao_app.sh --company"
-    }
+    "codex": { "mode": "local-plugin-skill", "singleEntrypoint": "scripts/run_post_loan_check.ps1", "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1" },
+    "workbuddy": { "mode": "skill-expert-expert-group", "singleEntrypoint": "workbuddy/run_workbuddy.ps1", "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1" },
+    "doubao": { "mode": "office-task-browser-agent", "skillFile": "packages/doubao/SKILL.md", "mobileTaskFile": "packages/doubao/mobile-task.md", "linuxEntrypoint": "packages/doubao/run_doubao_app.sh" }
   }
 }

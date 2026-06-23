@@ -43,4 +43,3 @@ if [[ "$python_ok" != "true" ]]; then
 fi
 
 printf '{"ok":true,"node":"%s","python":"%s","root":"%s"}\n' "$node_path" "$python_path" "$ROOT_DIR"
-

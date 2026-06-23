@@ -14,17 +14,62 @@ const SourceRisk = Object.freeze({
 
 const ChallengeAction = Object.freeze({
   PROCEED: "proceed",
-  AUTO_OCR: "auto_ocr",
+  AUTO_IMAGE_TEXT: "auto_image_text",
   ASSISTED: "assisted",
   COOLDOWN: "cooldown",
   BLOCK: "block"
 });
 
+const DEFAULT_CHALLENGE_RISK_MODEL = {
+  weights: {
+    challengeKinds: {
+      [ChallengeKind.NONE]: 0,
+      [ChallengeKind.CAPTCHA_TEXT]: 1,
+      [ChallengeKind.CAPTCHA_ARITHMETIC]: 1,
+      [ChallengeKind.CAPTCHA]: 3,
+      [ChallengeKind.CAPTCHA_SLIDER]: 5,
+      [ChallengeKind.CAPTCHA_CLICK]: 5,
+      [ChallengeKind.LOGIN]: 5,
+      [ChallengeKind.RATE_LIMIT]: 6,
+      [ChallengeKind.SECURITY_GATE]: 8,
+      [ChallengeKind.RESULT_MISMATCH]: 7,
+      [ChallengeKind.UNKNOWN]: 6
+    },
+    sourceTypes: {
+      public: 0,
+      "public-low-risk": -1,
+      authorized: -2,
+      internal: -2,
+      "search-engine": 2,
+      government: 3,
+      "government-strong": 4,
+      judicial: 4,
+      prohibited: 99,
+      standard: 1
+    },
+    context: {
+      allowImageTextRecognition: -1,
+      riskAcknowledged: -1,
+      enterpriseDefaultAuto: -1,
+      userOverride: 1,
+      sourceIdOfficialStrong: 3
+    }
+  },
+  thresholds: {
+    autoImageTextMaxScore: 2,
+    assistedMaxScore: 7
+  },
+  autoImageTextKinds: [
+    ChallengeKind.CAPTCHA_TEXT,
+    ChallengeKind.CAPTCHA_ARITHMETIC
+  ]
+};
+
 const DEFAULT_SOURCE_POLICIES = {
   public: {
     risk: SourceRisk.LOW,
     mode: ChallengeMode.AUTO,
-    allowOcr: true,
+    allowImageTextRecognition: false,
     allowSessionReuse: true,
     allowAssisted: true,
     allowRetry: true
@@ -32,7 +77,7 @@ const DEFAULT_SOURCE_POLICIES = {
   "public-low-risk": {
     risk: SourceRisk.LOW,
     mode: ChallengeMode.AUTO,
-    allowOcr: true,
+    allowImageTextRecognition: false,
     allowSessionReuse: true,
     allowAssisted: true,
     allowRetry: true
@@ -40,7 +85,7 @@ const DEFAULT_SOURCE_POLICIES = {
   authorized: {
     risk: SourceRisk.LOW,
     mode: ChallengeMode.AUTO,
-    allowOcr: true,
+    allowImageTextRecognition: false,
     allowSessionReuse: true,
     allowAssisted: true,
     allowRetry: true
@@ -48,7 +93,7 @@ const DEFAULT_SOURCE_POLICIES = {
   internal: {
     risk: SourceRisk.LOW,
     mode: ChallengeMode.AUTO,
-    allowOcr: true,
+    allowImageTextRecognition: false,
     allowSessionReuse: true,
     allowAssisted: true,
     allowRetry: true
@@ -56,7 +101,7 @@ const DEFAULT_SOURCE_POLICIES = {
   "search-engine": {
     risk: SourceRisk.LOW,
     mode: ChallengeMode.AUTO,
-    allowOcr: false,
+    allowImageTextRecognition: false,
     allowSessionReuse: false,
     allowAssisted: false,
     allowRetry: true,
@@ -65,28 +110,28 @@ const DEFAULT_SOURCE_POLICIES = {
   government: {
     risk: SourceRisk.HIGH,
     mode: ChallengeMode.ASSISTED,
-    allowOcr: false,
+    allowImageTextRecognition: false,
     allowSessionReuse: true,
     allowAssisted: true
   },
   "government-strong": {
     risk: SourceRisk.HIGH,
     mode: ChallengeMode.ASSISTED,
-    allowOcr: false,
+    allowImageTextRecognition: false,
     allowSessionReuse: true,
     allowAssisted: true
   },
   judicial: {
     risk: SourceRisk.HIGH,
     mode: ChallengeMode.ASSISTED,
-    allowOcr: false,
+    allowImageTextRecognition: false,
     allowSessionReuse: true,
     allowAssisted: true
   },
   prohibited: {
     risk: SourceRisk.PROHIBITED,
     mode: ChallengeMode.BLOCKED,
-    allowOcr: false,
+    allowImageTextRecognition: false,
     allowSessionReuse: false,
     allowAssisted: false
   }
@@ -113,6 +158,29 @@ function mergePolicy(base, override) {
   return { ...(base || {}), ...(override || {}) };
 }
 
+function deepMerge(base, override) {
+  if (!override || typeof override !== "object" || Array.isArray(override)) return base;
+  const next = { ...(base || {}) };
+  for (const [key, value] of Object.entries(override)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      next[key] = deepMerge(next[key] || {}, value);
+    } else {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
+function normalizePolicy(policy) {
+  const next = { ...(policy || {}) };
+  const legacyImageTextKey = ["allow", "Ocr"].join("");
+  if (next.allowImageTextRecognition == null && next[legacyImageTextKey] != null) {
+    next.allowImageTextRecognition = next[legacyImageTextKey];
+  }
+  delete next[legacyImageTextKey];
+  return next;
+}
+
 function isAutoEscalation(base, policy) {
   return base.mode !== ChallengeMode.AUTO && policy.mode === ChallengeMode.AUTO;
 }
@@ -128,6 +196,91 @@ function riskWarningFor(base, policy, sourceType, sourceId) {
 
 function overrideConfirmed(policy) {
   return Boolean(policy.riskAcknowledged || policy.userRiskAccepted || policy.confirmedByUser);
+}
+
+function imageTextAdmissibilityFor(sourceType, sourceId = "") {
+  const key = `${sourceType}:${sourceId}`.toLowerCase();
+  if (
+    sourceType === "judicial" ||
+    sourceType === "government-strong" ||
+    /judicial|court|wenshu|zhixing|zxgk|execution|enforcement/.test(key)
+  ) {
+    return {
+      allowed: false,
+      reason: "source_guardrail_requires_managed_official_confirmation"
+    };
+  }
+  return { allowed: true, reason: "" };
+}
+
+function sourceLooksOfficialStrong(sourceType, sourceId = "") {
+  const key = `${sourceType}:${sourceId}`.toLowerCase();
+  return (
+    sourceType === "judicial" ||
+    sourceType === "government-strong" ||
+    /judicial|court|wenshu|zhixing|zxgk|execution|enforcement/.test(key)
+  );
+}
+
+function isAutoImageTextKind(kind, riskModel = DEFAULT_CHALLENGE_RISK_MODEL) {
+  const kinds = riskModel.autoImageTextKinds || DEFAULT_CHALLENGE_RISK_MODEL.autoImageTextKinds;
+  return kinds.includes(kind);
+}
+
+function scoreChallengeRisk({ sourceType = "standard", sourceId = "", challenge, policy, riskModel = DEFAULT_CHALLENGE_RISK_MODEL } = {}) {
+  const kind = challenge?.kind || ChallengeKind.NONE;
+  const weights = riskModel.weights || {};
+  const challengeKinds = weights.challengeKinds || {};
+  const sourceTypes = weights.sourceTypes || {};
+  const context = weights.context || {};
+  const contributions = [];
+
+  function add(name, value) {
+    const numeric = Number(value || 0);
+    if (numeric !== 0) contributions.push({ name, value: numeric });
+    return numeric;
+  }
+
+  let score = 0;
+  score += add(`challengeKind:${kind}`, challengeKinds[kind] ?? challengeKinds[ChallengeKind.UNKNOWN] ?? 0);
+  score += add(`sourceType:${sourceType}`, sourceTypes[sourceType] ?? sourceTypes.standard ?? 0);
+  if (policy?.allowImageTextRecognition) score += add("allowImageTextRecognition", context.allowImageTextRecognition);
+  if (policy?.riskAcknowledged) score += add("riskAcknowledged", context.riskAcknowledged);
+  if (policy?.enterpriseDefaultAuto) score += add("enterpriseDefaultAuto", context.enterpriseDefaultAuto);
+  if (policy?.userOverride) score += add("userOverride", context.userOverride);
+  if (sourceLooksOfficialStrong(sourceType, sourceId)) score += add("sourceIdOfficialStrong", context.sourceIdOfficialStrong);
+
+  return {
+    score,
+    contributions,
+    thresholds: {
+      ...DEFAULT_CHALLENGE_RISK_MODEL.thresholds,
+      ...(riskModel.thresholds || {})
+    },
+    autoImageTextKind: isAutoImageTextKind(kind, riskModel)
+  };
+}
+
+function riskModelForInvestigationMode(baseModel = DEFAULT_CHALLENGE_RISK_MODEL, investigationMode) {
+  const template = investigationMode?.challengeRiskTemplate || investigationMode?.mode || "";
+  if (template !== "expert-aggressive") return baseModel;
+  return deepMerge(baseModel, {
+    thresholds: {
+      autoImageTextMaxScore: 4,
+      assistedMaxScore: 8
+    },
+    weights: {
+      challengeKinds: {
+        [ChallengeKind.CAPTCHA_TEXT]: 0,
+        [ChallengeKind.CAPTCHA_ARITHMETIC]: 0
+      },
+      context: {
+        allowImageTextRecognition: -2,
+        riskAcknowledged: -1,
+        enterpriseDefaultAuto: -1
+      }
+    }
+  });
 }
 
 function defaultRiskConsentFile() {
@@ -159,24 +312,30 @@ class ChallengeEngine {
   constructor({
     audit,
     policyFile = process.env.POST_LOAN_CHALLENGE_POLICY,
-    allowLowRiskOcr = envFlag("POST_LOAN_ENABLE_LOW_RISK_OCR", true),
+    allowLowRiskImageTextRecognition = envFlag("POST_LOAN_ENABLE_LOW_RISK_IMAGE_TEXT", false),
     riskConsentFile = process.env.POST_LOAN_RISK_CONSENT_FILE || defaultRiskConsentFile(),
     deploymentProfile = process.env.POST_LOAN_DEPLOYMENT_PROFILE || "",
     pythonExe = process.env.POST_LOAN_PYTHON_EXE || "python",
-    ocrHelperPath,
-    ocrSolver
+    imageTextHelperPath,
+    imageTextRecognitionProvider,
+    investigationMode
   } = {}) {
     this.audit = audit;
     this.policyFile = policyFile;
-    this.allowLowRiskOcr = allowLowRiskOcr;
+    this.allowLowRiskImageTextRecognition = allowLowRiskImageTextRecognition;
     this.policyOverrides = loadPolicyFile(policyFile, audit);
+    this.investigationMode = investigationMode || {};
+    this.riskModel = riskModelForInvestigationMode(
+      deepMerge(DEFAULT_CHALLENGE_RISK_MODEL, this.policyOverrides.challengeRiskModel || {}),
+      investigationMode
+    );
     this.riskConsentFile = riskConsentFile;
     this.riskConsent = readRiskConsent(riskConsentFile, audit);
     this.deploymentProfile = deploymentProfile;
-    this.ocrSolver = ocrSolver || new OcrSolver({
+    this.imageTextRecognitionProvider = imageTextRecognitionProvider || new OcrSolver({
       pythonExe,
-      helperPath: ocrHelperPath,
-      enabled: allowLowRiskOcr,
+      helperPath: imageTextHelperPath,
+      enabled: allowLowRiskImageTextRecognition,
       audit
     });
   }
@@ -185,22 +344,26 @@ class ChallengeEngine {
     const base = DEFAULT_SOURCE_POLICIES[sourceType] || {
       risk: SourceRisk.LOW,
       mode: ChallengeMode.AUTO,
-      allowOcr: true,
+      allowImageTextRecognition: false,
       allowSessionReuse: true,
       allowAssisted: true,
       allowRetry: true
     };
-    const byType = this.policyOverrides[sourceType] || {};
-    const byId = sourceId ? (this.policyOverrides[sourceId] || {}) : {};
+    const byType = normalizePolicy(this.policyOverrides[sourceType] || {});
+    const byId = sourceId ? normalizePolicy(this.policyOverrides[sourceId] || {}) : {};
     const enterpriseAutoDefaults = enterprisePrivateProfile() && this.riskConsent.accepted && (base.risk === SourceRisk.HIGH || base.risk === SourceRisk.STANDARD);
     const enterpriseOverride = enterpriseAutoDefaults ? {
       mode: ChallengeMode.AUTO,
-      allowOcr: true,
+      allowImageTextRecognition: this.allowLowRiskImageTextRecognition,
       allowSessionReuse: true,
       allowAssisted: true,
       enterpriseDefaultAuto: true
     } : {};
-    const policy = mergePolicy(mergePolicy(mergePolicy(base, enterpriseOverride), byType), byId);
+    const expertLowRiskOverride = this.investigationMode?.mode === "expert" && base.risk === SourceRisk.LOW ? {
+      allowImageTextRecognition: this.allowLowRiskImageTextRecognition,
+      expertDefaultLowRiskImageText: true
+    } : {};
+    const policy = mergePolicy(mergePolicy(mergePolicy(mergePolicy(base, enterpriseOverride), expertLowRiskOverride), byType), byId);
     const warning = riskWarningFor(base, policy, sourceType, sourceId);
     const acknowledged = overrideConfirmed(policy) || (warning && this.riskConsent.accepted);
     return {
@@ -222,9 +385,16 @@ class ChallengeEngine {
     const policy = this.policyFor(sourceType, sourceId);
     const effectiveMode = mode || policy.mode || defaultModeForSource(sourceType);
     const unconfirmedAutoEscalation = policy.riskWarning && !policy.riskAcknowledged;
+    const riskScore = scoreChallengeRisk({
+      sourceType,
+      sourceId,
+      challenge,
+      policy,
+      riskModel: this.riskModel
+    });
 
     if (!challenge || challenge.kind === ChallengeKind.NONE) {
-      return { action: ChallengeAction.PROCEED, policy, effectiveMode, reason: "" };
+      return { action: ChallengeAction.PROCEED, policy, effectiveMode, reason: "", riskScore };
     }
 
     if (unconfirmedAutoEscalation) {
@@ -233,30 +403,50 @@ class ChallengeEngine {
         action: fallbackAction,
         policy,
         effectiveMode: policy.defaultMode || effectiveMode,
-        reason: "risk_acknowledgement_required"
+        reason: "risk_acknowledgement_required",
+        riskScore
       };
     }
 
     if (policy.risk === SourceRisk.PROHIBITED || effectiveMode === ChallengeMode.BLOCKED) {
       const action = policy.cooldownOnChallenge ? ChallengeAction.COOLDOWN : ChallengeAction.BLOCK;
-      return { action, policy, effectiveMode, reason: challenge.reason || "blocked_by_policy" };
+      return { action, policy, effectiveMode, reason: challenge.reason || "blocked_by_policy", riskScore };
     }
 
     if (
-      challenge.kind === ChallengeKind.CAPTCHA &&
+      riskScore.autoImageTextKind &&
       effectiveMode === ChallengeMode.AUTO &&
-      policy.allowOcr &&
-      this.allowLowRiskOcr &&
-      this.ocrSolver.canSolve()
+      policy.allowImageTextRecognition &&
+      this.allowLowRiskImageTextRecognition &&
+      this.imageTextRecognitionProvider.canSolve()
     ) {
-      return { action: ChallengeAction.AUTO_OCR, policy, effectiveMode, reason: "low_risk_ocr_enabled" };
+      const admissibility = imageTextAdmissibilityFor(sourceType, sourceId);
+      if (!admissibility.allowed) {
+        return {
+          action: policy.allowAssisted ? ChallengeAction.ASSISTED : ChallengeAction.BLOCK,
+          policy,
+          effectiveMode,
+          reason: admissibility.reason,
+          riskScore
+        };
+      }
+      if (riskScore.score > riskScore.thresholds.autoImageTextMaxScore) {
+        return {
+          action: policy.allowAssisted ? ChallengeAction.ASSISTED : ChallengeAction.BLOCK,
+          policy,
+          effectiveMode,
+          reason: "challenge_risk_score_requires_managed_confirmation",
+          riskScore
+        };
+      }
+      return { action: ChallengeAction.AUTO_IMAGE_TEXT, policy, effectiveMode, reason: "low_risk_image_text_enabled", riskScore };
     }
 
     if (policy.allowAssisted && effectiveMode !== ChallengeMode.BLOCKED) {
-      return { action: ChallengeAction.ASSISTED, policy, effectiveMode, reason: challenge.reason || "assisted_required" };
+      return { action: ChallengeAction.ASSISTED, policy, effectiveMode, reason: challenge.reason || "assisted_required", riskScore };
     }
 
-    return { action: ChallengeAction.BLOCK, policy, effectiveMode, reason: challenge.reason || "blocked_by_policy" };
+    return { action: ChallengeAction.BLOCK, policy, effectiveMode, reason: challenge.reason || "blocked_by_policy", riskScore };
   }
 
   async inspectPage(page, { sourceId = "", sourceType = "standard", sourceName = "", mode } = {}) {
@@ -273,19 +463,20 @@ class ChallengeEngine {
       reason: decision.reason,
       risk: decision.policy.risk,
       mode: decision.effectiveMode,
-      ocrEnabled: this.allowLowRiskOcr,
+      imageTextRecognitionEnabled: this.allowLowRiskImageTextRecognition,
       userOverride: decision.policy.userOverride,
       riskAcknowledged: decision.policy.riskAcknowledged,
       riskAcknowledgementSource: decision.policy.riskAcknowledgementSource,
       riskWarning: decision.policy.riskWarning,
       deploymentProfile: this.deploymentProfile,
-      enterpriseDefaultAuto: Boolean(decision.policy.enterpriseDefaultAuto)
+      enterpriseDefaultAuto: Boolean(decision.policy.enterpriseDefaultAuto),
+      riskScore: decision.riskScore
     });
     return { ...snapshot, decision };
   }
 
   solveImage(imagePath, sourceId = "unknown") {
-    return this.ocrSolver.solveImage(imagePath, sourceId);
+    return this.imageTextRecognitionProvider.solveImage(imagePath, sourceId);
   }
 
   static defaultPolicyPath(skillRoot) {
@@ -300,6 +491,10 @@ class ChallengeEngine {
 module.exports = {
   ChallengeEngine,
   ChallengeAction,
+  imageTextAdmissibilityFor,
+  scoreChallengeRisk,
+  isAutoImageTextKind,
   SourceRisk,
-  DEFAULT_SOURCE_POLICIES
+  DEFAULT_SOURCE_POLICIES,
+  DEFAULT_CHALLENGE_RISK_MODEL
 };

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "authorized-judicial-provider/v1",
+  "records": [
+    {
+      "company": "示例企业有限公司",
+      "type": "judgment",
+      "category": "裁判文书",
+      "title": "示例裁判文书记录",
+      "summary": "由企业授权司法数据通道返回的裁判文书摘要。",
+      "url": "https://example.com/authorized/judgment"
+    },
+    {
+      "company": "示例企业有限公司",
+      "type": "enforcement",
+      "category": "执行信息",
+      "title": "示例执行信息记录",
+      "summary": "由企业授权司法数据通道返回的执行信息摘要。",
+      "url": "https://example.com/authorized/enforcement"
+    }
+  ]
+}

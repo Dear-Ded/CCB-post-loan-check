@@ -1,14 +1,8 @@
-# CCB贷前贷后查询
+# CCB 贷前贷后查询
 
-面向桌面 Agent 的企业贷前/贷后外部信息查询工具。输入企业名称后，自动查询固定公开门户，截取完整结果页，并按 Word 模板生成报告。
+面向企业贷前、贷后场景的公开信息查询、截图留痕和 Word 报告生成工具。用户输入企业名，系统按统一数据源清单完成查询、校验、截图、归档和报告生成；批量查询时会把最终 Word 统一归集到 `reports` 文件夹。
 
-当前默认尽量后台运行。跳过司法门户且不需要人工处理时，浏览器以 headless 方式执行；只有裁判文书网登录、执行信息公开网验证码等需要用户处理的场景才打开前台窗口。
-
-## 当前适配目标
-
-- Codex：本地插件 + skill，可在插件列表中显示并在新对话中触发。
-- WorkBuddy：面向非技术用户的表单、预检、启动提醒和一键执行包装。
-- 豆包：适配任务模式，利用 PC 端本地浏览器或 Web 端远程虚拟浏览器完成可视化网页任务。
+目标平台：Codex、WorkBuddy、豆包办公任务。三个平台共用同一套核心脚本、同一套证据合同和同一套输出标准。
 
 ## 查询范围
 
@@ -17,50 +11,118 @@
 - 河南省市场监督管理局
 - 中国裁判文书网
 - 中国执行信息公开网
-- 百度前三页
-- 医院/医疗机构可选补充卫生健康委员会：属地卫健委优先，属地不可用或无主体结果时自动切换河南省卫健委。
-- 法人/实控人可选补充被执行信息查询
+- 搜索引擎结果页
+- 医院/医疗机构可选补充：属地卫健委优先，属地不可用时切换省级卫健委
+- 可选法人、实控人执行信息查询，需要姓名和身份证号
 
-搜索引擎遇到验证码、异常流量、频控或超时，会自动记录冷却状态并切换/跳过，不把验证页截图写入报告。
+司法和执行信息是正式交付必查项。正式报告必须包含中国裁判文书网、中国执行信息公开网的官方页面成功查询截图；授权数据源、搜索引擎或其他公开线索只能作为补充材料，不能替代正式证据。如果官方结果页未完成，任务会失败或在批量汇总中标注高风险原因，不生成看似完整的正式报告。
 
-## 人机协作边界
+## 快速开始
 
-系统负责打开网页、填写企业名称/统一社会信用代码/身份证号、点击查询、验证结果页、截图和生成 Word。
-
-用户只处理不能自动完成或不应绕过的事项：
-
-- 登录中国裁判文书网。
-- 中国执行信息公开网如需登录，由用户完成。
-- 中国执行信息公开网验证码由用户输入。
-- 查询个人被执行信息时，由用户在启动阶段提供姓名和身份证号。
-
-验证码错误或页面未进入查询结果/无结果状态时，系统不会截图，会继续等待用户重新输入验证码。
-
-## 批量查询
-
-批量查询入口：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-batch-post-loan-check.ps1 `
-  -CompanyName "企业A,企业B" `
-  -OrgCode "代码A,代码B" `
-  -TemplateSlots -SkipJudicial -NoPrompt
+```bash
+npm install
+python3 -m pip install -r requirements.txt --user
 ```
 
-批量结果在一个文件夹内：
-
-- `reports`：只放最终 Word 报告，方便直接交付。
-- `evidence`：每家企业的截图、manifest、audit 证据材料。
-- `batch-summary.json`：每家企业成功/失败、报告路径和证据目录。
-
-如需重试上一次失败项：
+单家企业：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-batch-post-loan-check.ps1 -RetryFailed -TemplateSlots -SkipJudicial -NoPrompt
+.\run-post-loan-check.ps1 `
+  -CompanyName "濮阳豫能综合能源有限公司" `
+  -OrgCode "91410926MACJQ2HCXH" `
+  -TemplateSlots
 ```
 
-## 合规说明
+批量企业：
 
-本项目用于聚合公开门户、公开网页或经授权访问页面中的信息，并保留截图证据。默认不绕过登录、验证码或访问控制。
+```powershell
+.\run-batch-post-loan-check.ps1 `
+  -CompanyName "企业A,企业B,企业C" `
+  -OrgCode "代码A,代码B,代码C" `
+  -TemplateSlots `
+  -MaxAttempts 2
+```
 
-`ddddocr` 集成为可选辅助 OCR 能力，默认关闭；不得用于绕过司法、执行公开网等站点的验证码和访问控制。
+WorkBuddy JSON：
+
+```powershell
+.\packages\core-skill\workbuddy\run_workbuddy.ps1 `
+  -CompanyName "濮阳豫能综合能源有限公司" `
+  -OrgCode "91410926MACJQ2HCXH" `
+  -Json
+```
+
+豆包办公任务 Ubuntu 入口：
+
+```bash
+bash packages/doubao/run_doubao_app.sh \
+  --company "濮阳豫能综合能源有限公司" \
+  --org-code "91410926MACJQ2HCXH" \
+  --json
+```
+
+## 输出结构
+
+默认输出目录：
+
+```text
+%USERPROFILE%\Documents\CCB贷前贷后查询\outputs
+```
+
+单家报告：
+
+```text
+贷后查询-{企业名称}-{yyyyMMdd}.docx
+```
+
+批量报告：
+
+```text
+batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/
+  reports/        最终 Word 报告
+  evidence/       每家企业截图、manifest、audit 证据
+  batch-summary.json
+  retry-plan.json
+```
+
+批量交付时给用户 `reports` 文件夹即可；截图和审计材料保留在 `evidence`。
+
+## 授权会话与挑战项处理
+
+- 用户会话数据仅存储在本地机器，不上传任何服务器。
+- 登录页、挑战项页面、异常页、空白页只进入审计，不进入最终 Word。
+- 普通公开数据源支持自动导航、自动填充、自动重试。
+- 授权范围内的低风险图像文字识别为可选增强组件，默认关闭。
+- 司法、政务、执行类数据源默认采用托管处理：系统预填主体和非挑战字段，并等待真实结果或无结果状态。
+- 浏览器自动化测试与兼容性调试参数位于 `references/runtime-policy.example.json`，默认关闭。
+
+## 可选增强组件
+
+低风险图像文字识别组件不在默认安装包内。私有化部署如需启用，可在受信任目录运行：
+
+```powershell
+.\packages\core-skill\scripts\install_optional_image_text_recognition.ps1
+```
+
+## 质量标准
+
+- 不把登录页、挑战项页、异常页、空白页作为结果页。
+- 执行信息公开网必须确认结果或无结果状态后才截图。
+- 裁判文书网必须输入主体并进入主体结果页后才截图。
+- 搜索引擎必须捕获同一来源前三页完整结果；中途出现挑战项、登录或异常页时，不保留不完整截图进入最终报告。
+- 医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切换省级。
+- 批量查询把最终 Word 统一归集到 `reports`。
+
+## 验收
+
+```powershell
+.\tools\test-output-contract.ps1 `
+  -OutputRoot "C:\path\to\outputs" `
+  -Json
+```
+
+验收会检查 Word、manifest、截图、批量 `reports/evidence`，并拒绝内部烟测产物作为正式交付。
+
+## 合规边界
+
+本项目用于公开数据源或经授权访问数据源的信息归集和证据留痕。企业私有化部署场景下，企业管理员负责授权、访问频率、账号风险和合规策略管理。所有挑战项处理决策写入 audit，便于审计。

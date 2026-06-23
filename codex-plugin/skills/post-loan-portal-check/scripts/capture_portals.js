@@ -3,6 +3,9 @@ const path = require("path");
 const os = require("os");
 const readline = require("readline");
 const { chromium } = require("playwright");
+const { AuditLog } = require("./framework/audit");
+const { DataSourceRegistry } = require("./framework/data_source_registry");
+const { loadRuntimePolicy, browserCompatibilityArgs } = require("./framework/runtime_policy");
 
 function parseArgs(argv) {
   const out = {};
@@ -108,7 +111,7 @@ async function pageHealth(page) {
     "页面不存在",
     "出错",
     "错误",
-    "验证码",
+    "挑战项",
     "安全验证",
     "拖动滑块",
     "请登录",
@@ -138,13 +141,13 @@ async function waitForManualIfNeeded(page, targetName, manualTimeoutSeconds, man
   if (manualMode === "prompt") {
     while (!health.ok) {
       console.log(`[manual] ${targetName} is not acceptable yet: ${health.suspicious.join(", ") || "short/blank page"}`);
-      const answer = await askUser(`[manual] Fix login/captcha/error page for ${targetName} in the opened browser.`);
+      const answer = await askUser(`[manual] Fix login, page challenge, or error page for ${targetName} in the opened browser.`);
       if (answer.toLowerCase() === "skip") break;
       health = await pageHealth(page);
     }
   } else {
     console.log(`[manual] ${targetName} may need attention: ${health.suspicious.join(", ") || "short/blank page"}`);
-    console.log(`[manual] Complete login/captcha/check if needed. Waiting ${manualTimeoutSeconds}s, then continuing.`);
+    console.log(`[manual] Complete login, page challenge, or confirmation if needed. Waiting ${manualTimeoutSeconds}s, then continuing.`);
     await sleep(Math.max(0, Number(manualTimeoutSeconds || 0)) * 1000);
     health = await pageHealth(page);
   }
@@ -192,6 +195,16 @@ async function run() {
   const siteConfig = JSON.parse(fs.readFileSync(path.join(skillRoot, "references", "sites.json"), "utf8"));
   const screenshotsDir = path.join(outDir, "screenshots");
   fs.mkdirSync(screenshotsDir, { recursive: true });
+  const audit = new AuditLog(outDir);
+  const runtimePolicy = loadRuntimePolicy({ skillRoot, audit });
+  const sourceRegistry = new DataSourceRegistry({
+    config: siteConfig,
+    audit
+  });
+  const sourceHealth = process.env.POST_LOAN_DISABLE_SOURCE_HEALTHCHECK === "1"
+    ? []
+    : await sourceRegistry.healthCheckAvailable();
+  const dataSourceResults = await sourceRegistry.query(company);
 
   const userDataDir = path.join(os.homedir(), ".codex", "post-loan-portal-check", "chrome-profile");
   fs.mkdirSync(userDataDir, { recursive: true });
@@ -206,7 +219,7 @@ async function run() {
     viewport: { width: 1365, height: 768 },
     locale: "zh-CN",
     timezoneId: "Asia/Shanghai",
-    args: ["--disable-blink-features=AutomationControlled"]
+    args: browserCompatibilityArgs(runtimePolicy)
   });
 
   const page = context.pages()[0] || await context.newPage();
@@ -215,9 +228,11 @@ async function run() {
     startedAt: new Date().toISOString(),
     outputDir: outDir,
     screenshotsDir,
+    sourceHealth,
+    dataSourceResults,
     targets: [],
     notes: [
-      "司法网站如出现验证码、登录或安全验证，需人工在浏览器中完成后继续截图；本流程不绕过验证码。",
+      "司法网站如出现挑战项、登录或安全确认，需在授权浏览器会话中完成后继续截图；本流程只记录真实结果页。",
       "门户站内搜索不可用时，自动退回到 Baidu site:domain 查询并在 strategyUsed 中记录。"
     ]
   };
@@ -232,7 +247,7 @@ async function run() {
       } else if (target.strategy === "manual-judicial") {
         item.strategyUsed = "manual-official";
         await navigateWithRetries(page, target.officialUrl);
-        console.log(`[manual] ${target.name}: search "${company}" in the official site, complete any captcha/login, then continue.`);
+        console.log(`[manual] ${target.name}: search "${company}" in the official site, complete any page challenge or login, then continue.`);
         await page.bringToFront().catch(() => {});
         if (manualMode === "prompt") {
           await askUser(`[manual] Finish ${target.name} search for "${company}" in the opened browser.`);
@@ -267,6 +282,7 @@ async function run() {
   manifest.finishedAt = new Date().toISOString();
   const manifestPath = path.join(outDir, "manifest.json");
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+  audit.flush();
   await context.close();
   console.log(`[manifest] ${manifestPath}`);
 }

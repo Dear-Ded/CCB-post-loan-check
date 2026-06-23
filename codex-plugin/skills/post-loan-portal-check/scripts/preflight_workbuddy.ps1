@@ -4,7 +4,21 @@ param(
 
 $ErrorActionPreference = "SilentlyContinue"
 
-$skillRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$CommandPath = $MyInvocation.MyCommand.Path
+if ([string]::IsNullOrWhiteSpace($CommandPath)) {
+  if ($env:POST_LOAN_SKILL_ROOT -and (Test-Path -LiteralPath $env:POST_LOAN_SKILL_ROOT)) {
+    $skillRoot = (Resolve-Path -LiteralPath $env:POST_LOAN_SKILL_ROOT).Path
+  } else {
+    $candidate = Join-Path (Get-Location).Path "packages\core-skill"
+    if (-not (Test-Path -LiteralPath $candidate)) {
+      $candidate = Split-Path -Parent (Get-Location).Path
+    }
+    $skillRoot = (Resolve-Path -LiteralPath $candidate).Path
+  }
+} else {
+  $skillRoot = Split-Path -Parent (Split-Path -Parent $CommandPath)
+}
+
 $runtimeRoot = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies"
 $nodeExe = if ($env:POST_LOAN_NODE_EXE) { $env:POST_LOAN_NODE_EXE } else { Join-Path $runtimeRoot "node\bin\node.exe" }
 $pythonExe = if ($env:POST_LOAN_PYTHON_EXE) { $env:POST_LOAN_PYTHON_EXE } else { Join-Path $runtimeRoot "python\python.exe" }
@@ -19,12 +33,18 @@ $chromeExe = if ($env:POST_LOAN_CHROME_EXE) {
   )
   ($chromeCandidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1)
 }
+
 $templateItem = Get-ChildItem -LiteralPath (Join-Path $skillRoot "assets") -Filter "*.docx" | Select-Object -First 1
 $template = if ($templateItem) { $templateItem.FullName } else { Join-Path $skillRoot "assets\template.docx" }
 $outputRoot = if ($env:POST_LOAN_OUTPUT_ROOT) {
   $env:POST_LOAN_OUTPUT_ROOT
 } else {
-  Join-Path ([Environment]::GetFolderPath("MyDocuments")) "CCB贷前贷后查询\outputs"
+  $productDirName = [string]::Concat(
+    [char]67, [char]67, [char]66,
+    [char]36151, [char]21069, [char]36151, [char]21518,
+    [char]26597, [char]35810
+  )
+  Join-Path ([Environment]::GetFolderPath("MyDocuments")) (Join-Path $productDirName "outputs")
 }
 
 $checks = [ordered]@{

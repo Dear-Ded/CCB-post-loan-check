@@ -1,66 +1,8 @@
-# CCB贷前贷后查询
+# CCB 贷前贷后查询
 
-> 面向企业私有化部署的贷前/贷后外部信息查询、截图留痕与 Word 报告生成工具。
+面向企业贷前、贷后场景的公开信息查询、截图留痕和 Word 报告生成工具。用户输入企业名，系统按统一数据源清单完成查询、校验、截图、归档和报告生成；批量查询时会把最终 Word 统一归集到 `reports` 文件夹。
 
-![Codex](https://img.shields.io/badge/Codex-skill%20ready-111827)
-![WorkBuddy](https://img.shields.io/badge/WorkBuddy-expert%20package-2563eb)
-![Doubao](https://img.shields.io/badge/Doubao-office%20task-16a34a)
-![License](https://img.shields.io/badge/license-MIT-64748b)
-
-用户只需要输入企业名或批量企业名单。系统负责打开公开或授权访问的数据源、填写主体、处理挑战策略、校验结果页、截图留痕，并按统一模板生成 Word 报告。批量任务会把最终 Word 统一归集到 `reports` 文件夹，截图和审计材料留在 `evidence`。
-
-跨平台产品原则：易搜索、易加载、一句话触发、输出质量稳定可靠。平台适配时优先读取 [LOAD_THIS_PROJECT.md](LOAD_THIS_PROJECT.md) 和 [platform-contract.json](packages/core-skill/references/platform-contract.json)。
-
-## 核心体验
-
-- 小白用户：输入企业名，拿 Word。
-- 批量用户：粘贴企业名单，拿 `reports` 文件夹。
-- 企业管理员：启用私有化档位，全局确认后能力默认全开，再按源关闭。
-- 审计人员：每次挑战、失败、截图、报告路径都有证据链。
-
-## 工作流
-
-```mermaid
-flowchart LR
-  A["输入企业名/批量名单"] --> B["解析主体与企业代码"]
-  B --> C["执行门户查询"]
-  C --> D["挑战处理策略"]
-  D --> D1["auto: 自动处理"]
-  D --> D2["assisted: 用户托管"]
-  D --> D3["blocked: 阻断并审计"]
-  D1 --> E["结果页校验"]
-  D2 --> E
-  D3 --> F["失败原因留痕"]
-  E --> G["截图证据"]
-  G --> H["生成 Word"]
-  H --> I["单家报告或 batch reports"]
-```
-
-## 平台适配
-
-| 平台 | 形态 | 入口 | 输出 |
-| --- | --- | --- | --- |
-| Codex | 本地 skill/plugin | `run-post-loan-check.ps1` / `run-batch-post-loan-check.ps1` | Word / reports |
-| WorkBuddy | skill、专家、专家团 | `workbuddy/run_workbuddy.ps1` | JSON + Word / reports |
-| 豆包办公任务 | 浏览器/云端电脑任务 | `packages/doubao/office-task.md` | Word / reports |
-| 豆包 App | Ubuntu 办公任务模式直接执行；不支持时后台交接 | `packages/doubao/run_doubao_app.sh` / `packages/doubao/mobile-task.md` | Word / reports / 下载链接 |
-
-## 对话加载
-
-公开仓库地址：
-
-```text
-https://github.com/Dear-Ded/CCB-
-```
-
-可以直接把这个 URL 发给支持 GitHub 抓取的平台，让它读取项目并运行对应入口：
-
-- Codex：读取 `packages/core-skill/SKILL.md` 或 `codex-plugin/skills/post-loan-portal-check`。
-- WorkBuddy：导入 `packages/core-skill/workbuddy/package-manifest.json`。
-- 豆包办公任务：读取 `packages/doubao/office-task.md`；PC 本地可调用 `packages/doubao/run_doubao_local.ps1`。
-- 豆包 App：读取 `packages/doubao/SKILL.md` 和 `packages/doubao/mobile-task.md`；Ubuntu 办公任务模式下运行 `packages/doubao/run_doubao_app.sh`，结果以 Word、`reports` 或下载链接返回。
-
-更详细的发现与加载说明见 [PLATFORM_DISCOVERY.md](PLATFORM_DISCOVERY.md)。
+目标平台：Codex、WorkBuddy、豆包办公任务。三个平台共用同一套核心脚本、同一套证据合同和同一套输出标准。
 
 ## 查询范围
 
@@ -70,45 +12,57 @@ https://github.com/Dear-Ded/CCB-
 - 中国裁判文书网
 - 中国执行信息公开网
 - 搜索引擎结果页
-- 医院/医疗机构补充卫健委查询：属地优先，属地不可用或无主体结果时切河南省卫健委
-- 可选法人/实控人被执行信息查询：必须由用户提供姓名和身份证号
+- 医院/医疗机构可选补充：属地卫健委优先，属地不可用时切换省级卫健委
+- 可选法人、实控人执行信息查询，需要姓名和身份证号
+
+司法和执行信息是正式交付必查项。正式报告必须包含中国裁判文书网、中国执行信息公开网的官方页面成功查询截图；授权数据源、搜索引擎或其他公开线索只能作为补充材料，不能替代正式证据。如果官方结果页未完成，任务会失败或在批量汇总中标注高风险原因，不生成看似完整的正式报告。
 
 ## 快速开始
-
-Linux / 豆包 App 办公任务预检：
 
 ```bash
 npm install
 python3 -m pip install -r requirements.txt --user
-bash packages/doubao/preflight_doubao_app.sh
 ```
 
 单家企业：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-post-loan-check.ps1 `
+.\run-post-loan-check.ps1 `
   -CompanyName "濮阳豫能综合能源有限公司" `
   -OrgCode "91410926MACJQ2HCXH" `
-  -TemplateSlots -SkipJudicial -NoPrompt
+  -TemplateSlots
 ```
 
 批量企业：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\run-batch-post-loan-check.ps1 `
+.\run-batch-post-loan-check.ps1 `
   -CompanyName "企业A,企业B,企业C" `
   -OrgCode "代码A,代码B,代码C" `
-  -TemplateSlots -SkipJudicial -NoPrompt -MaxAttempts 2
+  -TemplateSlots `
+  -MaxAttempts 2
 ```
 
 WorkBuddy JSON：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\core-skill\workbuddy\run_workbuddy.ps1 `
+.\packages\core-skill\workbuddy\run_workbuddy.ps1 `
   -CompanyName "濮阳豫能综合能源有限公司" `
   -OrgCode "91410926MACJQ2HCXH" `
-  -SkipJudicial -SkipSearch -Json
+  -Json
 ```
+
+豆包办公任务 Ubuntu 入口：
+
+```bash
+bash packages/doubao/run_doubao_app.sh \
+  --company "濮阳豫能综合能源有限公司" \
+  --org-code "91410926MACJQ2HCXH" \
+  --mode enhanced \
+  --json
+```
+
+如需同步查询法人或实控人的个人被执行信息，必须提供真实姓名和身份证号，格式为 `--person "姓名|身份证号"`；批量任务不接收个人查询参数，避免企业和个人证据混写。
 
 ## 输出结构
 
@@ -131,77 +85,47 @@ batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/
   reports/        最终 Word 报告
   evidence/       每家企业截图、manifest、audit 证据
   batch-summary.json
+  retry-plan.json
 ```
 
-批量交付时，用户只需要下载或交付 `reports`：
+批量交付时给用户 `reports` 文件夹即可；截图和审计材料保留在 `evidence`。
 
-```text
-reports/
-  贷后查询-企业A-20260618.docx
-  贷后查询-企业B-20260618.docx
-```
+## 授权会话与挑战项处理
 
-## 挑战处理策略
+- 用户会话数据仅存储在本地机器，不上传任何服务器。
+- 登录页、挑战项页面、异常页、空白页只进入审计，不进入最终 Word。
+- 普通公开数据源支持自动导航、自动填充、自动重试。
+- 授权范围内的低风险图像文字识别为可选增强组件，默认关闭。
+- 司法、政务、执行类数据源默认采用托管处理：系统预填主体和非挑战字段，并等待真实结果或无结果状态。
+- 浏览器自动化测试与兼容性调试参数位于 `references/runtime-policy.example.json`，默认关闭。
 
-普通公开、授权、内部数据源默认 `auto`，OCR、自动填充、自动重试开箱即用。司法、政务、强风控门户在普通模式下默认托管处理。企业私有化部署可以启用全源自动档位。
+## 可选增强组件
 
-企业私有化部署：
+低风险图像文字识别组件不在默认安装包内。私有化部署如需启用，可在受信任目录运行：
 
 ```powershell
-$env:POST_LOAN_DEPLOYMENT_PROFILE = "enterprise-private"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\core-skill\scripts\confirm_challenge_risk.ps1 -Accept -EnterprisePrivate
-```
-
-撤销全局确认：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\core-skill\scripts\confirm_challenge_risk.ps1 -Revoke
-```
-
-可选配置：
-
-```powershell
-$env:POST_LOAN_OUTPUT_ROOT = "D:\reports"
-$env:POST_LOAN_ENABLE_LOW_RISK_OCR = "1"
-$env:POST_LOAN_CHALLENGE_POLICY = ".\packages\core-skill\references\challenge-policy.example.json"
+.\packages\core-skill\scripts\install_optional_image_text_recognition.ps1
 ```
 
 ## 质量标准
 
-- 不把登录页、验证码页、异常页、空白页作为结果页。
-- 执行公开网必须确认结果/无结果状态后才截图。
-- 搜索引擎必须同一来源前三页完整可用才输出；中途触发验证、登录或异常流量则整组放弃。
-- 医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切省级。
-- 批量查询只向用户交付 `reports`，截图和审计留在 `evidence`。
+- 不把登录页、挑战项页、异常页、空白页作为结果页。
+- 执行信息公开网必须确认结果或无结果状态后才截图。
+- 裁判文书网必须输入主体并进入主体结果页后才截图。
+- 搜索引擎必须捕获同一来源前三页完整结果；中途出现挑战项、登录或异常页时，不保留不完整截图进入最终报告。
+- 医院/医疗机构卫健委查询属地优先，属地不可用或无主体结果时切换省级。
+- 批量查询把最终 Word 统一归集到 `reports`。
 
-## 版本验收
-
-仓库内置输出契约验收脚本，用来确认各平台入口不是“只写了描述”，而是真的能产出设计标准要求的交付物：
+## 验收
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\test-output-contract.ps1 `
-  -OutputRoot "C:\path\to\outputs" -Json
+.\tools\test-output-contract.ps1 `
+  -OutputRoot "C:\path\to\outputs" `
+  -Json
 ```
 
-已覆盖验收项：
-
-- Codex 单家和批量入口
-- WorkBuddy 单家 JSON 和批量 JSON 入口
-- 豆包 PC 本地任务单家和批量入口
-- 豆包 App 手机端交接入口
-- Word 文件存在且非空
-- manifest 存在且包含截图
-- 批量 `reports`、`evidence`、`batch-summary.json` 完整
-
-## 文档
-
-- [平台适配矩阵](ADAPTERS.md)
-- [挑战处理引擎调研](CHALLENGE_ENGINE_RESEARCH.md)
-- [通用数据源接入框架产品架构方案](通用数据源接入框架产品架构方案.md)
-- [豆包办公任务说明](packages/doubao/office-task.md)
-- [豆包 App 手机端任务说明](packages/doubao/mobile-task.md)
-- [豆包 App 办公任务运行环境适配](packages/doubao/doubao-app-runtime.md)
+验收会检查 Word、manifest、截图、批量 `reports/evidence`，并拒绝内部烟测产物作为正式交付。
 
 ## 合规边界
 
-本项目用于公开数据源或经授权访问数据源的信息归集和证据留痕。企业私有化部署模式下，企业管理员可启用全源自动处理，并由企业自行承担授权、访问频率、账号风险和合规策略管理责任。所有挑战处理决策写入 audit，便于审计。
+本项目用于公开数据源或经授权访问数据源的信息归集和证据留痕。企业私有化部署场景下，企业管理员负责授权、访问频率、账号风险和合规策略管理。所有挑战项处理决策写入 audit，便于审计。

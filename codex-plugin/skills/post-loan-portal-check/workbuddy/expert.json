@@ -1,77 +1,57 @@
 {
-  "schemaVersion": "0.1",
-  "id": "post-loan-portal-check",
-  "displayName": "贷后门户查询",
-  "description": "输入企业名称后，自动查询固定外部门户、截取完整结果页，并按模板生成 Word 报告。",
+  "id": "ccb-post-loan",
+  "displayName": "CCB贷前贷后查询",
+  "description": "输入企业名称后，执行贷前贷后外部门户查询，校验真实截图证据并生成 Word 报告。",
   "audience": "nonTechnical",
-  "entrypoint": "run_workbuddy.ps1",
-  "preflight": "preflight_workbuddy.ps1",
-  "form": {
-    "fields": [
-      {
-        "name": "companyName",
-        "label": "企业名称/批量企业名单",
-        "type": "textarea",
-        "required": true,
-        "placeholder": "单个企业直接输入名称；批量可用逗号、顿号或换行分隔"
-      },
-      {
-        "name": "orgCode",
-        "label": "统一社会信用代码/组织机构代码",
-        "type": "text",
-        "required": false,
-        "placeholder": "不知道可以不填"
-      },
-      {
-        "name": "includeHealthCommission",
-        "label": "医院/医疗机构",
-        "type": "boolean",
-        "default": false
-      },
-      {
-        "name": "includePersons",
-        "label": "同步查询法人/实控人被执行信息",
-        "type": "boolean",
-        "default": false
-      },
-      {
-        "name": "persons",
-        "label": "法人/实控人",
-        "type": "array",
-        "visibleWhen": "includePersons=true",
-        "itemFields": [
-          { "name": "name", "label": "姓名", "type": "text", "required": true },
-          { "name": "idNumber", "label": "身份证号", "type": "text", "required": true }
-        ]
-      }
-    ]
-  },
-  "startupNotice": {
-    "title": "开始前只需要你做这一次",
-    "items": [
-      "我会打开浏览器并把能填的信息都填好。",
-      "请登录中国裁判文书网。",
-      "请在每个中国执行信息公开网页面只输入验证码。",
-      "完成后不用回到聊天窗口，我会自动继续并生成报告。"
-    ]
-  },
-  "runtimePolicy": {
-    "preferBackground": true,
-    "foregroundOnlyFor": ["court-login", "captcha"],
-    "persistentBrowserProfile": true,
-      "rejectInvalidScreenshots": true,
-      "dynamicScreenshotCount": true,
-      "normalPublicSourcesDefaultAuto": true,
-      "lowRiskOcrDefaultEnabled": true,
-      "highRiskAutoRequiresFirstUseConsent": true,
-      "enterprisePrivateProfileSupported": true
+  "platforms": {
+    "desktop": {
+      "os": "Windows",
+      "entrypoint": "workbuddy/run_workbuddy.ps1",
+      "commandTemplate": ".\\workbuddy\\run_workbuddy.ps1 -CompanyName \"{companyName}\" {orgCodeArg} {personArgs} -Mode \"{mode}\" {healthArg} -Json"
     },
-  "outputs": {
-    "defaultRoot": "%USERPROFILE%\\Documents\\CCB贷前贷后查询\\outputs",
-    "filePattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",
-    "batchFolderPattern": "batch-post-loan-{yyyyMMdd-HHmmss}-{pid}",
-    "batchReportsFolder": "reports",
-    "batchEvidenceFolder": "evidence",
-    "openFolderOnComplete": true
+    "mobile": {
+      "os": "Linux",
+      "entrypoint": "workbuddy/run_workbuddy.sh",
+      "commandTemplate": "bash workbuddy/run_workbuddy.sh --company \"{companyName}\" {orgCodeArg} {personArgs} --mode \"{mode}\" {healthArg} --json"
+    }
+  },
+  "inputs": [
+    { "name": "companyName", "label": "企业名称", "type": "text", "required": true },
+    {
+      "name": "orgCode",
+      "label": "统一社会信用代码",
+      "type": "text",
+      "required": false,
+      "help": "不填写时系统会尽力公开查询；查不到或不确定时会写入证据缺口。"
+    },
+    {
+      "name": "mode",
+      "label": "查询模式",
+      "type": "select",
+      "default": "enhanced",
+      "options": [
+        { "value": "standard", "label": "标准模式" },
+        { "value": "enhanced", "label": "增强模式" },
+        { "value": "deep", "label": "深度模式" },
+        { "value": "expert", "label": "专家模式" }
+      ],
+      "help": "专家模式为成功率优先的可审计配置，需管理员确认风险说明后使用。"
+    },
+    { "name": "includeHealthCommission", "label": "是否医院/医疗机构", "type": "boolean", "default": false },
+    { "name": "personArgs", "label": "个人被执行查询", "type": "text", "required": false, "help": "多个时可用换行或逗号分隔，每项格式为 姓名|身份证号。" }
+  ],
+  "startupNotice": [
+    "WorkBuddy 电脑端是 Windows，使用 PowerShell 入口。",
+    "WorkBuddy 手机端是 Linux，使用 bash 入口。",
+    "正式司法/执行报告要求法院官方页面成功查询截图；补充材料不能替代正式证据。",
+    "不得模拟、不得生成样例、不得编造数据。"
+  ],
+  "outputPattern": "贷后查询-{companyName}-{yyyyMMdd}.docx",
+  "rules": {
+    "challengeHandling": "managed",
+    "dynamicScreenshotCount": true,
+    "rejectInvalidScreenshots": true,
+    "sourceAuditRequired": true,
+    "subjectGraphRequired": true
   }
 }

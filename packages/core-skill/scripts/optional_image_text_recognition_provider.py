@@ -1,8 +1,9 @@
 """
-Optional OCR helper for agent-controlled workflows.
+Optional image text recognition helper for agent-controlled workflows.
 
-This module is intentionally opt-in. Do not use it to bypass logins,
-captchas, or access controls on judicial or enforcement websites.
+This module is intentionally opt-in for authorized low-risk image text
+recognition tasks. Judicial, government, and execution sources keep this
+disabled by default.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ def recognize_image(image_path: str) -> str:
         import ddddocr  # type: ignore
     except ImportError as exc:
         raise RuntimeError(
-            "ddddocr is not installed. Install it only for compliant OCR use cases."
+            "Optional image text recognition provider is not installed."
         ) from exc
 
     image = Path(image_path).read_bytes()
@@ -26,5 +27,5 @@ def recognize_image(image_path: str) -> str:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise SystemExit("Usage: optional_ddddocr.py <image_path>")
+        raise SystemExit("Usage: optional_image_text_recognition_provider.py <image_path>")
     print(recognize_image(sys.argv[1]))

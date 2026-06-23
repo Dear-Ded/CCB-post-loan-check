@@ -1,76 +1,42 @@
-# Doubao Task Mode Package
+# Doubao Package
 
-This package adapts the workflow for Doubao task mode.
+This package adapts `CCB贷前贷后查询` for Doubao App office-task mode on Ubuntu/Linux.
 
-## Design Target
+## Quick Load
 
-Doubao task mode should run the workflow as a browser-state task:
-
-- On PC clients, use the local Doubao browser session when available.
-- On Web clients, use the remote virtual browser session.
-- On Doubao App office-task mode, prefer direct skill/task execution and direct Word or `reports` output.
-- If the mobile App cannot run the required browser/file task directly, let the user start and supervise the task while execution happens in the cloud or PC worker.
-- For batch tasks, keep the user-facing output to the `reports` folder and keep screenshots/audit evidence under `evidence`.
-- Do not assume local Windows paths exist in a remote task environment; use the packaged scripts when available, otherwise reproduce the same browser workflow and output contract.
-
-## Local Entry
-
-If Doubao runs on a PC client with local file access, call:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\doubao\run_doubao_local.ps1 `
-  -CompanyName "濮阳豫能综合能源有限公司" `
-  -OrgCode "91410926MACJQ2HCXH" `
-  -SkipJudicial -SkipSearch -Json
+```text
+加载 https://github.com/Dear-Ded/CCB- 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。
 ```
 
-For batch:
+## Hard Rules
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\doubao\run_doubao_local.ps1 `
-  -CompanyName "企业A,企业B" `
-  -OrgCode "代码A,代码B" `
-  -SkipJudicial -SkipSearch -Json
-```
+- 不得模拟。
+- 不得墨迹。
+- 不能胡编乱造数据。
+- 必须原原本本执行项目脚本。
+- 正式司法/执行输出必须来自法院官方页面成功查询截图；补充材料不能替代正式证据。
 
-For Doubao App mobile entry, call the mobile wrapper when a script bridge is available. If the App's office-task mode can load skills directly, read `mobile-task.md` and execute the same state machine in the App task environment. If not, this wrapper represents the fallback handoff to a cloud or PC worker.
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packages\doubao\run_doubao_mobile.ps1 `
-  -CompanyName "濮阳豫能综合能源有限公司" `
-  -OrgCode "91410926MACJQ2HCXH" `
-  -SkipJudicial -SkipSearch -Json
-```
-
-Inside Doubao App office-task mode on Ubuntu, use the Linux entrypoint:
+## Run
 
 ```bash
 bash packages/doubao/preflight_doubao_app.sh
-bash packages/doubao/run_doubao_app.sh \
-  --company "濮阳豫能综合能源有限公司" \
-  --org-code "91410926MACJQ2HCXH" \
-  --skip-judicial --skip-search --json
+bash packages/doubao/run_doubao_app.sh --company "企业名" --mode enhanced --json
 ```
 
-## User Handoff
+Optional personal enforcement checks are single-company only:
 
-At the beginning of the task, tell the user:
+```bash
+bash packages/doubao/run_doubao_app.sh \
+  --company "企业名" \
+  --person "姓名|身份证号" \
+  --mode enhanced \
+  --json
+```
 
-- The mobile App may execute the office task directly; if the current environment cannot run the browser or file workflow, the same task is handed to a cloud or PC worker.
-- China Judgments Online may require login.
-- China Enforcement Information may require login.
-- China Enforcement Information often loads poorly; retry is normal.
-- The user may need to input captchas multiple times.
-- The task will not screenshot until the result/no-result page is confirmed.
+## Output
 
-## Browser State Machine
+- Single: `贷后查询-{企业名称}-{yyyyMMdd}.docx`
+- Batch: `batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/reports`
+- Evidence: `batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/evidence`
 
-1. Open all pages requiring human action.
-2. Wait for login and captcha readiness.
-3. Fill all non-captcha fields.
-4. Wait for user captcha input.
-5. Submit query.
-6. If captcha fails or no result state appears, stay on the page and wait for new captcha input.
-7. Capture only confirmed result/no-result pages.
-8. Generate the Word report.
-9. For batch tasks, collect all Word files into `reports` and keep per-company evidence under `evidence`.
+The final answer to the user should expose the Word file, the `reports` folder, or a downloadable result link. Evidence folders are retained for audit.

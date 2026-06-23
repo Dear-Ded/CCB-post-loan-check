@@ -10,12 +10,17 @@ param(
 
   [string]$OutputRoot = "",
 
-  [switch]$SkipJudicial,
+  [switch]$SmokeQuick,
+
+  [switch]$NoPrompt,
 
   [switch]$SkipSearch,
 
   [ValidateSet("auto", "assisted", "blocked")]
   [string]$JudicialMode = "assisted",
+
+  [ValidateSet("standard", "enhanced", "deep", "expert")]
+  [string]$Mode = "enhanced",
 
   [switch]$Json
 )
@@ -25,11 +30,33 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-$workbuddyRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$CommandPath = $MyInvocation.MyCommand.Path
+$workbuddyRoot = if ([string]::IsNullOrWhiteSpace($CommandPath)) {
+  $candidate = Join-Path (Get-Location).Path "packages\core-skill\workbuddy"
+  if (-not (Test-Path -LiteralPath $candidate)) {
+    $candidate = Join-Path (Get-Location).Path "workbuddy"
+  }
+  (Resolve-Path -LiteralPath $candidate).Path
+} else {
+  Split-Path -Parent $CommandPath
+}
 $skillRoot = Split-Path -Parent $workbuddyRoot
 $preflight = Join-Path $skillRoot "scripts\preflight_workbuddy.ps1"
 $runner = Join-Path $skillRoot "scripts\run_post_loan_check.ps1"
 $batchRunner = Join-Path $skillRoot "scripts\run_batch_post_loan_check.ps1"
+
+function Invoke-LocalPowerShellScript {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$ScriptPath,
+
+    [hashtable]$Parameters = @{}
+  )
+
+  $scriptText = Get-Content -Raw -LiteralPath $ScriptPath
+  $scriptBlock = [scriptblock]::Create($scriptText)
+  & $scriptBlock @Parameters
+}
 
 function Write-Result($ok, $message, $reportPath = "", $outputDir = "") {
   $result = [ordered]@{
@@ -47,8 +74,65 @@ function Write-Result($ok, $message, $reportPath = "", $outputDir = "") {
   }
 }
 
+function Get-EffectiveOutputRoot {
+  if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { return $OutputRoot }
+  if ($preflightResult -and $preflightResult.outputRoot -and $preflightResult.outputRoot.path) {
+    return [string]$preflightResult.outputRoot.path
+  }
+  if ($env:POST_LOAN_OUTPUT_ROOT) { return $env:POST_LOAN_OUTPUT_ROOT }
+  $productDirName = [string]::Concat(
+    [char]67, [char]67, [char]66,
+    [char]36151, [char]21069, [char]36151, [char]21518,
+    [char]26597, [char]35810
+  )
+  return (Join-Path ([Environment]::GetFolderPath("MyDocuments")) (Join-Path $productDirName "outputs"))
+}
+
+function Write-WrapperFailureSummary([string]$Reason, [string]$Phase = "workbuddy_wrapper") {
+  $root = Get-EffectiveOutputRoot
+  New-Item -ItemType Directory -Path $root -Force | Out-Null
+  $runDir = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+  $runDirPath = if ($runDir) {
+    $runDir.FullName
+  } else {
+    Join-Path $root ("wrapper-failure-{0}" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+  }
+  New-Item -ItemType Directory -Path $runDirPath -Force | Out-Null
+  $summaryPath = Join-Path $runDirPath "failure-summary.json"
+  if (-not (Test-Path -LiteralPath $summaryPath)) {
+    $payload = [ordered]@{
+      ok = $false
+      finalReportGenerated = $false
+      company = $CompanyName
+      orgCode = $OrgCode
+      mode = $Mode
+      judicialMode = $JudicialMode
+      phase = $Phase
+      reason = $Reason
+      runDir = $runDirPath
+      generatedAt = (Get-Date).ToString("o")
+      screenshots = @()
+      missingEvidence = @()
+      nextAction = "Inspect the run folder and retry the official source capture. A formal Word report was not generated."
+    }
+    $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+    @(
+      "# Query Failure Diagnostics",
+      "",
+      "- Company: $CompanyName",
+      "- Mode: $Mode",
+      "- Phase: $Phase",
+      "- Reason: $Reason",
+      "- Formal report: not generated"
+    ) | Set-Content -LiteralPath (Join-Path $runDirPath "failure-summary.md") -Encoding UTF8
+  }
+  return $summaryPath
+}
+
 try {
-  $preflightJson = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $preflight -Json
+  $preflightJson = Invoke-LocalPowerShellScript -ScriptPath $preflight -Parameters @{ Json = $true }
   $preflightResult = $preflightJson | ConvertFrom-Json
   if (-not $preflightResult.ok) {
     $msg = "Preflight failed: " + (($preflightResult.messages | ForEach-Object { $_ }) -join "; ")
@@ -63,37 +147,38 @@ try {
     if ($trimmed) { $companyItems += $trimmed }
   }
   $isBatch = $companyItems.Count -gt 1
+  if ($isBatch -and $Person.Count -gt 0) {
+    throw "Person execution checks are only supported for single-company runs."
+  }
 
   if ($isBatch) {
     if (-not $Json) { Write-Host "Batch background mode: final Word reports will be collected in reports." }
   } else {
-    if (-not $Json) { Write-Host "Background mode: a visible browser opens only for login or captcha." }
+    if (-not $Json) { Write-Host "Background mode: a visible browser opens only for login or page challenge." }
   }
 
   $runnerPath = if ($isBatch) { $batchRunner } else { $runner }
-  $argsList = @(
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-File", $runnerPath,
-    "-CompanyName", $CompanyName,
-    "-TemplateSlots",
-    "-JudicialMode", $JudicialMode
-  )
-  if (-not [string]::IsNullOrWhiteSpace($OrgCode)) { $argsList += @("-OrgCode", $OrgCode) }
-  if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { $argsList += @("-OutputRoot", $OutputRoot) }
-  if ($IncludeHealthCommission) { $argsList += "-IncludeHealthCommission" }
-  if ($SkipJudicial -or $isBatch) { $argsList += "-SkipJudicial" }
-  if ($SkipSearch) { $argsList += "-SkipSearch" }
-  if ($isBatch -or $SkipJudicial) { $argsList += "-NoPrompt" }
-  foreach ($p in $Person) { $argsList += @("-Person", $p) }
+  $runnerParameters = @{
+    CompanyName = $CompanyName
+    TemplateSlots = $true
+    JudicialMode = $JudicialMode
+    Mode = $Mode
+  }
+  if (-not [string]::IsNullOrWhiteSpace($OrgCode)) { $runnerParameters.OrgCode = $OrgCode }
+  if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { $runnerParameters.OutputRoot = $OutputRoot }
+  if ($IncludeHealthCommission) { $runnerParameters.IncludeHealthCommission = $true }
+  if ($SmokeQuick) { $runnerParameters.SmokeQuick = $true }
+  if ($NoPrompt) { $runnerParameters.NoPrompt = $true }
+  if ($SkipSearch) { $runnerParameters.SkipSearch = $true }
+  if ($Person.Count -gt 0 -and -not $isBatch) { $runnerParameters.Person = $Person }
 
   $before = Get-Date
-  $childOutput = & powershell.exe @argsList 2>&1
-  if (-not $Json) { $childOutput | ForEach-Object { Write-Host $_ } }
-  if ($LASTEXITCODE -ne 0) {
-    Write-Result $false "Report was not generated because a source did not reach a verified result page or required login/captcha was unfinished."
-    exit $LASTEXITCODE
+  if ($Json) {
+    $childOutput = Invoke-LocalPowerShellScript -ScriptPath $runnerPath -Parameters $runnerParameters *> $null
+  } else {
+    $childOutput = Invoke-LocalPowerShellScript -ScriptPath $runnerPath -Parameters $runnerParameters 2>&1
   }
+  if (-not $Json) { $childOutput | ForEach-Object { Write-Host $_ } }
 
   $outputRootPath = if ($OutputRoot) { $OutputRoot } else { $preflightResult.outputRoot.path }
   $batchReports = $null
@@ -129,14 +214,15 @@ try {
   }
 } catch {
   $text = $_.Exception.Message
+  $summaryPath = Write-WrapperFailureSummary -Reason $text
   if ($text -match "org-code|credit code") {
-    Write-Result $false "Organization code was not confirmed. Please provide unified social credit code or organization code."
+    Write-Result $false "Organization code was not confirmed. Please provide unified social credit code or organization code." "" (Split-Path -Parent $summaryPath)
   } elseif ($text -match "Timed out waiting.*login|China Judgments") {
-    Write-Result $false "China Judgments Online login was not completed or expired. Restart and log in once in the opened browser."
-  } elseif ($text -match "captcha") {
-    Write-Result $false "Captcha is still required. Restart and enter the captcha on the prepared page."
+    Write-Result $false "China Judgments Online login was not completed or expired. Restart and log in once in the opened browser." "" (Split-Path -Parent $summaryPath)
+  } elseif ($text -match "captcha|challenge") {
+    Write-Result $false "A page challenge is still required. Restart and complete the prepared page in the authorized browser session." "" (Split-Path -Parent $summaryPath)
   } else {
-    Write-Result $false ("Task failed: " + $text)
+    Write-Result $false ("Task failed: " + $text) "" (Split-Path -Parent $summaryPath)
   }
   exit 1
 }

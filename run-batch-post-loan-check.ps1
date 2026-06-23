@@ -4,40 +4,47 @@ param(
 
   [string[]]$OrgCode = @(),
 
-  [switch]$IncludeHealthCommission,
+  [string]$OutputRoot = "",
 
-  [switch]$SkipJudicial,
+  [switch]$IncludeHealthCommission,
 
   [switch]$SkipSearch,
 
+  [switch]$SmokeQuick,
+
   [switch]$RetryFailed,
 
-  [int]$MaxAttempts = 1,
+  [int]$MaxAttempts = 2,
 
   [ValidateSet("auto", "assisted", "blocked")]
   [string]$JudicialMode = "assisted",
+
+  [ValidateSet("standard", "enhanced", "deep", "expert")]
+  [string]$Mode = "enhanced",
 
   [switch]$NoPrompt,
 
   [switch]$TemplateSlots
 )
 
-$runner = Join-Path $PSScriptRoot "packages\core-skill\scripts\run_batch_post_loan_check.ps1"
-$argsList = @(
-  "-NoProfile",
-  "-ExecutionPolicy", "Bypass",
-  "-File", $runner,
-  "-JudicialMode", $JudicialMode,
-  "-MaxAttempts", $MaxAttempts
-)
+$Root = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+$runner = Join-Path $Root "packages\core-skill\scripts\run_batch_post_loan_check.ps1"
+$parameters = @{
+  JudicialMode = $JudicialMode
+  Mode = $Mode
+  MaxAttempts = $MaxAttempts
+  CompanyName = $CompanyName
+}
 
-foreach ($company in $CompanyName) { $argsList += @("-CompanyName", $company) }
-foreach ($code in $OrgCode) { $argsList += @("-OrgCode", $code) }
-if ($IncludeHealthCommission) { $argsList += "-IncludeHealthCommission" }
-if ($SkipJudicial) { $argsList += "-SkipJudicial" }
-if ($SkipSearch) { $argsList += "-SkipSearch" }
-if ($RetryFailed) { $argsList += "-RetryFailed" }
-if ($NoPrompt) { $argsList += "-NoPrompt" }
-if ($TemplateSlots) { $argsList += "-TemplateSlots" }
+if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { $parameters.OutputRoot = $OutputRoot }
+if ($OrgCode.Count -gt 0) { $parameters.OrgCode = $OrgCode }
+if ($IncludeHealthCommission) { $parameters.IncludeHealthCommission = $true }
+if ($SkipSearch) { $parameters.SkipSearch = $true }
+if ($SmokeQuick) { $parameters.SmokeQuick = $true }
+if ($RetryFailed) { $parameters.RetryFailed = $true }
+if ($NoPrompt) { $parameters.NoPrompt = $true }
+if ($TemplateSlots) { $parameters.TemplateSlots = $true }
 
-& powershell.exe @argsList
+$scriptText = Get-Content -Raw -LiteralPath $runner
+$scriptBlock = [scriptblock]::Create($scriptText)
+& $scriptBlock @parameters

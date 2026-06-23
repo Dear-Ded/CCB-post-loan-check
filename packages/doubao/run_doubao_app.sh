@@ -7,10 +7,13 @@ SCRIPT_DIR="$CORE_DIR/scripts"
 
 COMPANY_NAME=""
 ORG_CODE=""
+PERSON_VALUES=()
 OUTPUT_ROOT="${POST_LOAN_OUTPUT_ROOT:-$ROOT_DIR/outputs/doubao-app}"
 JUDICIAL_MODE="assisted"
+MODE="${POST_LOAN_INVESTIGATION_MODE:-enhanced}"
 INCLUDE_HEALTH="0"
-SKIP_JUDICIAL="0"
+SMOKE_QUICK="0"
+NO_PROMPT="0"
 SKIP_SEARCH="0"
 JSON_OUTPUT="0"
 MAX_SECONDS="${POST_LOAN_MAX_SECONDS:-540}"
@@ -20,10 +23,13 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --company|--company-name) COMPANY_NAME="${2:-}"; shift 2 ;;
     --org-code) ORG_CODE="${2:-}"; shift 2 ;;
+    --person) PERSON_VALUES+=("${2:-}"); shift 2 ;;
     --output-root) OUTPUT_ROOT="${2:-}"; shift 2 ;;
     --judicial-mode) JUDICIAL_MODE="${2:-assisted}"; shift 2 ;;
+    --mode) MODE="${2:-enhanced}"; shift 2 ;;
     --include-health-commission) INCLUDE_HEALTH="1"; shift ;;
-    --skip-judicial) SKIP_JUDICIAL="1"; shift ;;
+    --smoke-quick) SMOKE_QUICK="1"; shift ;;
+    --no-prompt) NO_PROMPT="1"; shift ;;
     --skip-search) SKIP_SEARCH="1"; shift ;;
     --json) JSON_OUTPUT="1"; shift ;;
     --max-seconds) MAX_SECONDS="${2:-540}"; shift 2 ;;
@@ -37,49 +43,184 @@ if [[ -z "$COMPANY_NAME" ]]; then
   exit 2
 fi
 
-NODE_BIN="${POST_LOAN_NODE_EXE:-$(command -v node)}"
-PYTHON_BIN="${POST_LOAN_PYTHON_EXE:-$(command -v python3 || command -v python)}"
+RUNTIME_ROOT="${POST_LOAN_RUNTIME_ROOT:-$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies}"
+NODE_BIN="${POST_LOAN_NODE_EXE:-}"
+PYTHON_BIN="${POST_LOAN_PYTHON_EXE:-}"
+
+node_works() {
+  local candidate="$1"
+  [[ -n "$candidate" ]] && "$candidate" -e "process.exit(0)" >/dev/null 2>&1
+}
+
+python_works() {
+  local candidate="$1"
+  [[ -n "$candidate" ]] && "$candidate" -c "import sys; sys.exit(0)" >/dev/null 2>&1
+}
+
+resolve_working_runtime() {
+  local kind="$1"
+  shift
+  local candidate
+  for candidate in "$@"; do
+    [[ -z "$candidate" ]] && continue
+    if [[ "$kind" == "node" ]]; then
+      if node_works "$candidate"; then printf '%s\n' "$candidate"; return 0; fi
+    else
+      if python_works "$candidate"; then printf '%s\n' "$candidate"; return 0; fi
+    fi
+  done
+  return 1
+}
+
+NODE_CANDIDATES=(
+  "$NODE_BIN"
+  "$RUNTIME_ROOT/node/bin/node"
+  "$RUNTIME_ROOT/node/bin/node.exe"
+)
+if command -v node >/dev/null 2>&1; then NODE_CANDIDATES+=("$(command -v node)"); fi
+
+PYTHON_CANDIDATES=(
+  "$PYTHON_BIN"
+  "$RUNTIME_ROOT/python/bin/python3"
+  "$RUNTIME_ROOT/python/bin/python"
+  "$RUNTIME_ROOT/python/python.exe"
+  "$RUNTIME_ROOT/python/python"
+)
+if command -v python3 >/dev/null 2>&1; then PYTHON_CANDIDATES+=("$(command -v python3)"); fi
+if command -v python >/dev/null 2>&1; then PYTHON_CANDIDATES+=("$(command -v python)"); fi
+
+NODE_BIN="$(resolve_working_runtime node "${NODE_CANDIDATES[@]}" || true)"
+PYTHON_BIN="$(resolve_working_runtime python "${PYTHON_CANDIDATES[@]}" || true)"
+if [[ -z "$NODE_BIN" || -z "$PYTHON_BIN" ]]; then
+  echo "Missing runtime: node=$NODE_BIN python=$PYTHON_BIN" >&2
+  exit 2
+fi
+
 export POST_LOAN_SKILL_ROOT="$CORE_DIR"
 export PYTHONUTF8=1
+export PYTHONIOENCODING=utf-8
 export NODE_PATH="${POST_LOAN_NODE_MODULES:-$ROOT_DIR/node_modules}"
+export POST_LOAN_BROWSER_ENGINE="${POST_LOAN_BROWSER_ENGINE:-playwright}"
+export POST_LOAN_BROWSER_PERSISTENCE="${POST_LOAN_BROWSER_PERSISTENCE:-ephemeral}"
 mkdir -p "$OUTPUT_ROOT"
 
 json_escape() {
-  "$PYTHON_BIN" -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=False)[1:-1])' "$1"
+  "$NODE_BIN" -e 'process.stdout.write(JSON.stringify(process.argv[1] || "").slice(1, -1))' "$1"
+}
+
+write_failure_summary() {
+  local run_dir="$1"
+  local company="$2"
+  local code="$3"
+  local phase="$4"
+  local reason="$5"
+  "$PYTHON_BIN" - "$run_dir" "$company" "$code" "$MODE" "$JUDICIAL_MODE" "$phase" "$reason" <<'PY'
+import json, os, sys
+from datetime import datetime, timezone
+
+run_dir, company, code, mode, judicial_mode, phase, reason = sys.argv[1:8]
+payload = {
+    "ok": False,
+    "finalReportGenerated": False,
+    "company": company,
+    "orgCode": code,
+    "mode": mode,
+    "judicialMode": judicial_mode,
+    "phase": phase,
+    "reason": reason,
+    "runDir": run_dir,
+    "generatedAt": datetime.now(timezone.utc).isoformat(),
+    "screenshots": [],
+    "missingEvidence": [],
+    "nextAction": "Required official result evidence was not confirmed. Re-run when the source is reachable; supplemental sources cannot replace formal evidence."
+}
+os.makedirs(run_dir, exist_ok=True)
+with open(os.path.join(run_dir, "failure-summary.json"), "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, ensure_ascii=False, indent=2)
+with open(os.path.join(run_dir, "failure-summary.md"), "w", encoding="utf-8") as handle:
+    handle.write("# Query Failure Diagnostics\n\n")
+    handle.write(f"- Company: {company}\n")
+    handle.write(f"- Mode: {mode}\n")
+    handle.write(f"- Phase: {phase}\n")
+    handle.write(f"- Reason: {reason}\n")
+    handle.write("- Formal report: not generated\n")
+PY
 }
 
 normalize_list() {
-  "$PYTHON_BIN" - "$1" <<'PY'
-import re, sys
-items=[x.strip() for x in re.split(r"[,，、\n\r]+", sys.argv[1]) if x.strip()]
-print("\n".join(items))
-PY
+  "$NODE_BIN" -e '
+const input = process.argv[1] || "";
+const items = input.split(/[,\uFF0C\u3001\n\r]+/).map((x) => x.trim()).filter(Boolean);
+process.stdout.write(items.join("\n"));
+' "$1"
 }
 
 mapfile -t COMPANIES < <(normalize_list "$COMPANY_NAME")
 mapfile -t CODES < <(normalize_list "$ORG_CODE")
+if [[ "${#PERSON_VALUES[@]}" -gt 0 ]]; then
+  mapfile -t PERSONS < <(normalize_list "$(printf '%s\n' "${PERSON_VALUES[@]}")")
+else
+  PERSONS=()
+fi
+if [[ "${#COMPANIES[@]}" -eq 0 ]]; then
+  COMPANIES=("$COMPANY_NAME")
+fi
+if [[ "${#COMPANIES[@]}" -gt 1 && "${#PERSONS[@]}" -gt 0 ]]; then
+  echo "Person queries are only supported for single-company runs." >&2
+  exit 2
+fi
 
 run_single() {
   local company="$1"
   local code="${2:-}"
-  local stamp run_dir manifest report args log_file
+  local stamp run_dir manifest report args log_file report_name template_path
   stamp="$(date +%Y%m%d-%H%M%S)"
   run_dir="$OUTPUT_ROOT/${company}-${stamp}"
   mkdir -p "$run_dir"
   log_file="$run_dir/run.log"
+  printf 'runtime node=%s python=%s mode=%s\n' "$NODE_BIN" "$PYTHON_BIN" "$MODE" >>"$log_file"
 
-  args=("$SCRIPT_DIR/capture_template_slots.js" "--company" "$company" "--out-dir" "$run_dir" "--judicial-mode" "$JUDICIAL_MODE")
+  args=("$SCRIPT_DIR/capture_template_slots.js" "--company" "$company" "--out-dir" "$run_dir" "--judicial-mode" "$JUDICIAL_MODE" "--mode" "$MODE" "--headless" "--no-prompt")
   [[ -n "$code" ]] && args+=("--org-code" "$code")
   [[ "$INCLUDE_HEALTH" == "1" ]] && args+=("--include-health-commission")
-  [[ "$SKIP_JUDICIAL" == "1" ]] && args+=("--skip-judicial")
+  [[ "$SMOKE_QUICK" == "1" ]] && args+=("--smoke-quick")
   [[ "$SKIP_SEARCH" == "1" ]] && args+=("--skip-search")
-  if [[ "$SKIP_JUDICIAL" == "1" ]]; then
-    args+=("--headless")
+  for person in "${PERSONS[@]}"; do
+    args+=("--person" "$person")
+  done
+
+  manifest="$run_dir/template-slots-manifest.json"
+  set +e
+  timeout "${MAX_SECONDS}s" "$NODE_BIN" "${args[@]}" >>"$log_file" 2>&1
+  local capture_status=$?
+  set -e
+  if [[ "$capture_status" -ne 0 && ! -f "$manifest" ]]; then
+    cat "$log_file" >&2 || true
+    write_failure_summary "$run_dir" "$company" "$code" "portal_capture" "Capture failed before manifest was created for $company. See run.log."
+    echo "Capture failed before manifest was created for $company" >&2
+    return "$capture_status"
+  fi
+  if [[ "$capture_status" -ne 0 ]]; then
+    cat "$log_file" >&2 || true
+    write_failure_summary "$run_dir" "$company" "$code" "portal_capture" "Capture failed for $company. See run.log."
+    echo "Capture failed for $company" >&2
+    return "$capture_status"
   fi
 
-  timeout "${MAX_SECONDS}s" "$NODE_BIN" "${args[@]}" >"$log_file" 2>&1
-  manifest="$run_dir/template-slots-manifest.json"
-  timeout 60s "$PYTHON_BIN" "$SCRIPT_DIR/build_report.py" --manifest "$manifest" --allow-unverified >>"$log_file" 2>&1
+  report_prefix=$'\u8d37\u540e\u67e5\u8be2'
+  report_name="${report_prefix}-${company}-$(date +%Y%m%d).docx"
+  template_name=$'\u8d37\u540e\u67e5\u8be2\u6a21\u677f.docx'
+  template_path="$CORE_DIR/assets/$template_name"
+  set +e
+  timeout 60s "$PYTHON_BIN" "$SCRIPT_DIR/build_report.py" --manifest "$manifest" --template "$template_path" --out "$run_dir/$report_name" >>"$log_file" 2>&1
+  local build_status=$?
+  set -e
+  if [[ "$build_status" -ne 0 ]]; then
+    cat "$log_file" >&2 || true
+    write_failure_summary "$run_dir" "$company" "$code" "report_build" "Report build failed for $company. See run.log."
+    echo "Report build failed for $company" >&2
+    return "$build_status"
+  fi
   report="$(find "$run_dir" -maxdepth 1 -name '*.docx' -type f | sort | tail -n 1)"
   if [[ -z "$report" ]]; then
     cat "$log_file" >&2 || true
@@ -92,7 +233,7 @@ run_single() {
 if [[ "${#COMPANIES[@]}" -le 1 ]]; then
   report="$(run_single "${COMPANIES[0]}" "${CODES[0]:-}")"
   if [[ "$JSON_OUTPUT" == "1" ]]; then
-    printf '{"ok":true,"mode":"doubao-app-office-task","reportPath":"%s","outputDir":"%s"}\n' "$(json_escape "$report")" "$(json_escape "$(dirname "$report")")"
+    printf '{"ok":true,"mode":"doubao-app-office-task","queryMode":"%s","reportPath":"%s","outputDir":"%s"}\n' "$(json_escape "$MODE")" "$(json_escape "$report")" "$(json_escape "$(dirname "$report")")"
   else
     echo "DONE $report"
   fi
@@ -105,25 +246,32 @@ evidence_root="$batch_root/evidence"
 mkdir -p "$reports_root" "$evidence_root"
 summary="$batch_root/batch-summary.jsonl"
 start_epoch="$(date +%s)"
+partial="false"
+remaining=0
 
 for i in "${!COMPANIES[@]}"; do
   if (( i >= CHUNK_SIZE )); then
+    partial="true"
+    remaining=$((${#COMPANIES[@]} - i))
     break
   fi
   now_epoch="$(date +%s)"
   if (( now_epoch - start_epoch > MAX_SECONDS )); then
+    partial="true"
+    remaining=$((${#COMPANIES[@]} - i))
     break
   fi
   company="${COMPANIES[$i]}"
   code="${CODES[$i]:-}"
-  company_output="$evidence_root"
   old_root="$OUTPUT_ROOT"
-  OUTPUT_ROOT="$company_output"
+  OUTPUT_ROOT="$evidence_root"
   ok="true"
   error=""
   report=""
+  delivered_report=""
   if report="$(run_single "$company" "$code" 2>&1)"; then
-    cp "$report" "$reports_root/"
+    delivered_report="$reports_root/$(basename "$report")"
+    cp "$report" "$delivered_report"
   else
     ok="false"
     error="$report"
@@ -131,19 +279,27 @@ for i in "${!COMPANIES[@]}"; do
   fi
   OUTPUT_ROOT="$old_root"
   printf '{"company":"%s","orgCode":"%s","ok":%s,"report":"%s","error":"%s"}\n' \
-    "$(json_escape "$company")" "$(json_escape "$code")" "$ok" "$(json_escape "$report")" "$(json_escape "$error")" >> "$summary"
+    "$(json_escape "$company")" "$(json_escape "$code")" "$ok" "$(json_escape "$delivered_report")" "$(json_escape "$error")" >> "$summary"
 done
 
-"$PYTHON_BIN" - "$summary" "$batch_root/batch-summary.json" <<'PY'
+"$PYTHON_BIN" - "$summary" "$batch_root/batch-summary.json" "$partial" "$remaining" "$MODE" <<'PY'
 import json, sys
-src, dst = sys.argv[1:3]
+src, dst, partial, remaining, mode = sys.argv[1:6]
 rows = [json.loads(line) for line in open(src, encoding="utf-8") if line.strip()]
-open(dst, "w", encoding="utf-8").write(json.dumps(rows, ensure_ascii=False, indent=2))
+payload = {
+    "ok": all(row.get("ok") for row in rows) and partial != "true",
+    "partial": partial == "true",
+    "remainingCompanies": int(remaining or 0),
+    "queryMode": mode,
+    "items": rows
+}
+open(dst, "w", encoding="utf-8").write(json.dumps(payload, ensure_ascii=False, indent=2))
 PY
 rm -f "$summary"
 
 if [[ "$JSON_OUTPUT" == "1" ]]; then
-  printf '{"ok":true,"mode":"doubao-app-office-task","reportsFolder":"%s","batchRoot":"%s"}\n' "$(json_escape "$reports_root")" "$(json_escape "$batch_root")"
+  if [[ "$partial" == "true" ]]; then ok_json="false"; else ok_json="true"; fi
+  printf '{"ok":%s,"partial":%s,"remainingCompanies":%s,"mode":"doubao-app-office-task","queryMode":"%s","reportsFolder":"%s","batchRoot":"%s"}\n' "$ok_json" "$partial" "$remaining" "$(json_escape "$MODE")" "$(json_escape "$reports_root")" "$(json_escape "$batch_root")"
 else
   echo "BATCH_DONE $reports_root"
 fi

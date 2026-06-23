@@ -1,26 +1,29 @@
 {
-  "name": "post-loan-portal-check",
-  "version": "0.1.0+codex.20260618084540",
-  "description": "\u81ea\u52a8\u67e5\u8be2 CCB \u8d37\u524d/\u8d37\u540e\u5916\u90e8\u4fe1\u606f\u95e8\u6237\u3001\u622a\u56fe\u5e76\u751f\u6210 Word \u62a5\u544a\u3002",
+  "name": "wallstreet-tieling",
+  "version": "0.5.0",
+  "description": "Wall Street Tieling / 华尔街驻铁岭办事处: open-source enterprise intelligence and risk discovery plugin.",
   "author": {
-    "name": "Local"
+    "name": "Dear-Ded"
   },
   "skills": "./skills/",
   "interface": {
-    "displayName": "CCB\u8d37\u524d\u8d37\u540e\u67e5\u8be2",
-    "shortDescription": "\u6309\u4f01\u4e1a\u540d\u67e5\u8be2\u56fa\u5b9a\u95e8\u6237\u5e76\u751f\u6210\u622a\u56fe Word",
-    "longDescription": "\u8f93\u5165\u4f01\u4e1a\u540d\u79f0\u540e\uff0c\u81ea\u52a8\u67e5\u8be2\u6cb3\u5357\u5e94\u6025\u3001\u751f\u6001\u73af\u5883\u3001\u5e02\u573a\u76d1\u7ba1\u3001\u88c1\u5224\u6587\u4e66\u3001\u6267\u884c\u516c\u5f00\u7f51\u548c\u767e\u5ea6\u524d\u4e09\u9875\uff0c\u6309\u6a21\u677f\u6c47\u603b\u622a\u56fe\u751f\u6210 CCB \u8d37\u524d\u8d37\u540e\u67e5\u8be2\u62a5\u544a\u3002",
-    "developerName": "Local",
+    "displayName": "华尔街驻铁岭办事处",
+    "shortDescription": "输入企业名，聚合公开情报、主体图谱、证据链和 Word 尽调报告。",
+    "longDescription": "Wall Street Tieling is an open-source enterprise intelligence and risk discovery system. It aggregates auditable public sources, standardizes evidence, builds subject graphs, and generates due diligence reports with source traceability.",
+    "developerName": "Dear-Ded",
     "category": "Productivity",
     "capabilities": [
       "Browser automation",
+      "Public OSINT source aggregation",
+      "Source health checks",
+      "Subject graph",
       "Screenshots",
       "Documents"
     ],
     "defaultPrompt": [
-      "\u7ed9\u8fd9\u5bb6\u4f01\u4e1a\u505a CCB \u8d37\u524d\u8d37\u540e\u67e5\u8be2",
-      "\u67e5\u8be2\u4f01\u4e1a\u5916\u90e8\u4fe1\u606f\u5e76\u751f\u6210 Word",
-      "\u540c\u6b65\u67e5\u8be2\u6cd5\u4eba\u88ab\u6267\u884c\u4fe1\u606f"
+      "给这家公司做一份企业情报与风险发现尽调报告",
+      "聚合公开信息，生成主体画像、证据链和 Word 报告",
+      "使用深度模式做更全面的主体关系检索"
     ]
   }
 }

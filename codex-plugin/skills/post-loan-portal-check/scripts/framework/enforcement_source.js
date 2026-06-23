@@ -1,11 +1,18 @@
 const crypto = require("crypto");
 
+const IMAGE_TEXT_CODE = "验证码";
+const CHECK_CODE = "校验码";
+const CONFIRM_ITEM = "确认项";
+const QUERY = "查询";
+const SEARCH = "搜索";
+
 function isCaptchaFailure(text) {
-  return /验证码.*(错误|不正确|有误|失效|为空)|校验码.*(错误|不正确|有误)|请输入.*验证码|验证码不能为空/.test(text);
+  const body = String(text || "");
+  return new RegExp(`${IMAGE_TEXT_CODE}.*(错误|不正确|有误|失效|为空)|${CHECK_CODE}.*(错误|不正确|有误)|请输入.*${IMAGE_TEXT_CODE}|${IMAGE_TEXT_CODE}不能为空|${CONFIRM_ITEM}.*(错误|失效|为空)`).test(body);
 }
 
 function isResultState(text) {
-  return /查询结果|未查询到|暂无数据|没有找到|无符合条件|没有符合条件|无相关信息|查询无结果|案号|执行法院|立案时间|执行标的/.test(text);
+  return /查询结果|未查询到|暂无数据|没有找到|无符合条件|没有符合条件|无相关信息|查询无结果|案号|执行法院|立案时间|执行标的/.test(String(text || ""));
 }
 
 async function pageText(page) {
@@ -19,6 +26,7 @@ async function getCaptchaState(page) {
     const input = document.querySelector("#yzm");
     const nameInput = document.querySelector("#pName");
     const cardInput = document.querySelector("#pCardNum");
+    const courtInput = document.querySelector("#selectCourtId");
     const form = (input || nameInput || cardInput)?.closest("form");
     const buttons = [...document.querySelectorAll("button,input[type='button'],input[type='submit'],a")]
       .map((node) => ({
@@ -55,6 +63,7 @@ async function getCaptchaState(page) {
       inputBox: boxOf(input),
       nameValue: nameInput?.value || "",
       cardValue: cardInput?.value || "",
+      courtValue: courtInput?.value || "",
       formAction: form?.action || "",
       formMethod: form?.method || "",
       buttons
@@ -70,6 +79,7 @@ async function getCaptchaState(page) {
     inputBox: null,
     nameValue: "",
     cardValue: "",
+    courtValue: "",
     formAction: "",
     formMethod: "",
     buttons: []
@@ -105,12 +115,20 @@ function captchaSignature(state) {
   return `${state.imageSrc}|${state.imageComplete}|${state.imageSize}|${state.hidden}`;
 }
 
-async function waitForCaptchaChange(page, beforeState, timeoutMs = 8000) {
+function digestSignature(digest) {
+  return digest && digest.ok ? `${digest.sha256}|${digest.bytes}` : "";
+}
+
+async function waitForCaptchaChange(page, beforeState, timeoutMs = 8000, beforeDigest = null) {
   const before = captchaSignature(beforeState);
+  const beforeImage = digestSignature(beforeDigest);
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const next = await getCaptchaState(page);
-    if (captchaSignature(next) !== before && next.imageComplete) return next;
+    const nextDigest = await getCaptchaImageDigest(page);
+    const stateChanged = captchaSignature(next) !== before;
+    const imageChanged = beforeImage && digestSignature(nextDigest) && digestSignature(nextDigest) !== beforeImage;
+    if ((stateChanged || imageChanged) && next.imageComplete) return next;
     await page.waitForTimeout(500);
   }
   return getCaptchaState(page);
@@ -150,6 +168,7 @@ async function waitUntil(page, label, predicate, timeoutMs = 10 * 60 * 1000) {
 module.exports = {
   attachEnforcementResponseAudit,
   captchaSignature,
+  digestSignature,
   getCaptchaImageDigest,
   getCaptchaState,
   getEnforcementDiagnosticState,
@@ -157,5 +176,12 @@ module.exports = {
   isResultState,
   pageText,
   waitForCaptchaChange,
-  waitUntil
+  waitUntil,
+  constants: {
+    CHECK_CODE,
+    CONFIRM_ITEM,
+    IMAGE_TEXT_CODE,
+    QUERY,
+    SEARCH
+  }
 };

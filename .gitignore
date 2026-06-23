@@ -2,6 +2,12 @@ outputs/
 **/outputs/
 profiles/
 **/profiles/
+.post-loan-profiles/
+.monitor-state/
+**/.monitor-state/
+**/.post-loan-profiles/
+**/chrome-profile/
+**/browser-profile/
 source-state.json
 audit-events.json
 *.log

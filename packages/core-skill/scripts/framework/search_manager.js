@@ -45,6 +45,11 @@ function subjectMatched(company, text) {
   return hits >= Math.min(2, terms.length);
 }
 
+function searchVariants(company) {
+  const trimmed = String(company || "").trim();
+  return trimmed ? [trimmed] : [];
+}
+
 function cooldownForChallenge(kind, baseMs) {
   if (kind === ChallengeKind.RATE_LIMIT) return Math.max(baseMs, 20 * 60 * 1000);
   if (kind === ChallengeKind.CAPTCHA) return Math.max(baseMs, 15 * 60 * 1000);
@@ -52,107 +57,129 @@ function cooldownForChallenge(kind, baseMs) {
   return baseMs;
 }
 
+function envFlag(name, fallback = false) {
+  const value = process.env[name];
+  if (value == null || value === "") return fallback;
+  return /^(1|true|yes|on)$/i.test(String(value));
+}
+
+function envInt(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 class SearchManager {
-  constructor({ audit, cooldownMs = 8 * 60 * 1000, stateStore, challengeEngine } = {}) {
+  constructor({
+    audit,
+    cooldownMs = 8 * 60 * 1000,
+    stateStore,
+    challengeEngine,
+    recoveryFirst = envFlag("POST_LOAN_SEARCH_RECOVERY_FIRST", true),
+    maxRecoveryAttempts = envInt("POST_LOAN_SEARCH_RECOVERY_ATTEMPTS", 3)
+  } = {}) {
     this.audit = audit;
     this.cooldownMs = cooldownMs;
     this.breaker = new CircuitBreaker({ cooldownMs, threshold: 1 });
     this.stateStore = stateStore || new SourceStateStore({ audit });
     this.challengeEngine = challengeEngine || new ChallengeEngine({ audit });
+    this.recoveryFirst = recoveryFirst;
+    this.maxRecoveryAttempts = Math.max(1, maxRecoveryAttempts);
   }
 
-  async capture({ page, company, captureCompleteScroll, add }) {
-    const query = company;
+  async capture({ page, company, captureCompleteScroll, add, discardCaptures }) {
     const context = page.context();
+    const variants = searchVariants(company);
     for (const engine of SEARCH_ENGINES) {
       const sourceId = `search:${engine.id}`;
       if (this.breaker.isOpen(engine.id) || this.stateStore.isCoolingDown(sourceId)) {
         const state = this.stateStore.get(sourceId);
-        this.audit?.record("search_engine_skipped_cooldown", { engine: engine.id, company, state });
-        continue;
+        if (!this.recoveryFirst) {
+          this.audit?.record("search_engine_skipped_cooldown", { engine: engine.id, company, state });
+          continue;
+        }
+        this.audit?.record("search_engine_cooldown_recovery_attempted", { engine: engine.id, company, state });
       }
 
       const searchPage = await context.newPage();
       let captured = 0;
       let blocked = false;
-      const validatedPages = [];
+      const searchCaptures = [];
       try {
         for (const pageNo of [1, 2, 3]) {
-          try {
-            await searchPage.goto(engine.url(query, pageNo), { waitUntil: "domcontentloaded", timeout: 15000 });
-            await searchPage.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
-            await searchPage.waitForTimeout(600);
-          } catch (error) {
-            const message = String(error.message || error);
-            this.audit?.record("search_page_load_failed", { engine: engine.id, company, pageNo, error: message });
-            this.stateStore.markCooldown(sourceId, {
-              reason: "page_load_failed",
-              cooldownMs: Math.max(this.cooldownMs, 5 * 60 * 1000),
-              payload: { pageNo, error: message }
-            });
-            blocked = true;
-            break;
-          }
+          let pageOk = false;
+          let lastError = "";
+          for (const variant of variants) {
+            for (let recoveryAttempt = 1; recoveryAttempt <= this.maxRecoveryAttempts; recoveryAttempt += 1) {
+              try {
+                await searchPage.goto(engine.url(variant, pageNo), { waitUntil: "domcontentloaded", timeout: 15000 });
+                await searchPage.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
+                await searchPage.waitForTimeout(600 + recoveryAttempt * 350);
+              } catch (error) {
+                lastError = String(error.message || error);
+                this.audit?.record("search_page_load_failed", { engine: engine.id, company, pageNo, variant, recoveryAttempt, error: lastError });
+                continue;
+              }
 
-          const snapshot = await this.challengeEngine.inspectPage(searchPage, {
-            sourceId,
-            sourceType: "search-engine",
-            sourceName: engine.name
-          });
-          const text = snapshot.text;
-          const challenge = snapshot.challenge;
-          if (challenge.kind !== "none") {
-            const cooldownMs = cooldownForChallenge(challenge.kind, this.cooldownMs);
-            this.breaker.trip(engine.id, challenge.reason);
-            this.audit?.record("search_challenge_detected", { engine: engine.id, company, pageNo, url: snapshot.url, title: snapshot.title, ...challenge });
-            this.stateStore.markCooldown(sourceId, {
-              reason: challenge.reason,
-              cooldownMs,
-              payload: { pageNo, kind: challenge.kind, url: snapshot.url, title: snapshot.title }
-            });
-            blocked = true;
-            break;
-          }
-
-          if (!engine.validUrl(searchPage.url()) || !subjectMatched(company, text)) {
-            this.audit?.record("search_subject_mismatch", { engine: engine.id, company, pageNo, url: searchPage.url() });
-            if (!engine.validUrl(searchPage.url())) {
-              this.stateStore.markCooldown(sourceId, {
-                reason: "invalid_search_url",
-                cooldownMs: Math.max(this.cooldownMs, 5 * 60 * 1000),
-                payload: { pageNo, url: searchPage.url() }
+              const snapshot = await this.challengeEngine.inspectPage(searchPage, {
+                sourceId,
+                sourceType: "search-engine",
+                sourceName: engine.name
               });
-            }
-            blocked = true;
-            break;
-          }
+              const text = snapshot.text;
+              const challenge = snapshot.challenge;
+              const validSearchResult = engine.validUrl(searchPage.url()) && subjectMatched(company, text);
+              if (challenge.kind !== "none" && !(challenge.kind === ChallengeKind.LOGIN && validSearchResult)) {
+                const cooldownMs = cooldownForChallenge(challenge.kind, this.cooldownMs);
+                this.audit?.record("search_challenge_detected", {
+                  engine: engine.id,
+                  company,
+                  pageNo,
+                  variant,
+                  recoveryAttempt,
+                  url: snapshot.url,
+                  title: snapshot.title,
+                  ...challenge
+                });
+                if (this.recoveryFirst && recoveryAttempt < this.maxRecoveryAttempts) {
+                  await searchPage.waitForTimeout(Math.min(8000, 1500 * recoveryAttempt));
+                  await searchPage.reload({ waitUntil: "domcontentloaded", timeout: 15000 }).catch(() => {});
+                  continue;
+                }
+                this.breaker.trip(engine.id, challenge.reason);
+                this.stateStore.markCooldown(sourceId, {
+                  reason: challenge.reason,
+                  cooldownMs,
+                  payload: { pageNo, kind: challenge.kind, url: snapshot.url, title: snapshot.title }
+                });
+                blocked = true;
+                lastError = challenge.reason;
+                break;
+              }
 
-          validatedPages.push({ pageNo, url: searchPage.url() });
-        }
+              if (!validSearchResult) {
+                this.audit?.record("search_subject_mismatch", { engine: engine.id, company, pageNo, variant, recoveryAttempt, url: searchPage.url() });
+                lastError = "subject_mismatch";
+                continue;
+              }
 
-        if (!blocked && validatedPages.length === 3) {
-          for (const item of validatedPages) {
-            await searchPage.goto(item.url, { waitUntil: "domcontentloaded", timeout: 15000 });
-            await searchPage.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {});
-            await searchPage.waitForTimeout(600);
-            const snapshot = await this.challengeEngine.inspectPage(searchPage, {
-              sourceId,
-              sourceType: "search-engine",
-              sourceName: engine.name
-            });
-            if (snapshot.challenge.kind !== "none" || !engine.validUrl(searchPage.url())) {
-              blocked = true;
-              this.audit?.record("search_capture_aborted_after_recheck", {
-                engine: engine.id,
-                company,
-                pageNo: item.pageNo,
-                url: searchPage.url(),
-                challenge: snapshot.challenge
-              });
+              const newCaptures = await captureCompleteScroll(searchPage, add, `${engine.name}第${pageNo}页`);
+              if (Array.isArray(newCaptures)) searchCaptures.push(...newCaptures);
+              captured += 1;
+              pageOk = true;
               break;
             }
-            await captureCompleteScroll(searchPage, add, `${engine.name}第${item.pageNo}页`);
-            captured += 1;
+            if (blocked || pageOk) break;
+          }
+          if (blocked) {
+            break;
+          }
+
+          if (!pageOk) {
+            if (!blocked) {
+              this.audit?.record("search_page_unresolved", { engine: engine.id, company, pageNo, error: lastError });
+            }
+            blocked = true;
+            break;
           }
         }
 
@@ -161,6 +188,10 @@ class SearchManager {
           this.stateStore.markSuccess(sourceId, { engine: engine.id, pages: captured });
           this.audit?.record("search_engine_completed", { engine: engine.id, company, pages: captured });
           return { ok: true, engine: engine.id, pages: captured };
+        }
+        if (blocked && searchCaptures.length && typeof discardCaptures === "function") {
+          discardCaptures(searchCaptures);
+          this.audit?.record("search_partial_captures_discarded", { engine: engine.id, company, count: searchCaptures.length });
         }
       } finally {
         await searchPage.close().catch(() => {});

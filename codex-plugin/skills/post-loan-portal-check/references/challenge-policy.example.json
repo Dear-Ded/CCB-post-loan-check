@@ -1,10 +1,59 @@
 {
-  "_comment": "Product defaults: normal public/authorized/internal sources use auto; judicial/government strong-risk sources use assisted; abnormal/prohibited sources use blocked. Advanced users may override any source type or source id. If changing a safer default to auto, set riskAcknowledged=true after confirming authorization, compliance, and account-risk acceptance.",
-  "_enterprisePrivate": "Set POST_LOAN_DEPLOYMENT_PROFILE=enterprise-private and complete global risk consent to make all source classes default to auto. Then override any source down to assisted or blocked here.",
+  "_comment": "Mechanism and policy are separated: the framework provides image text recognition, session reuse, retry, and assisted handoff mechanisms; this file decides which admissible source uses which mechanism. Product guardrails are still enforced centrally by the policy engine.",
+  "_guardrails": [
+    "Low-risk, internal, and authorized sources may opt in to image text recognition after explicit configuration.",
+    "Official judicial, government-strong, and execution sources default to managed official-page confirmation.",
+    "If a policy attempts to enable image text recognition for guarded official sources, the engine records the request but routes to managed official-page confirmation instead."
+  ],
+  "challengeRiskModel": {
+    "_comment": "Configurable scoring model for challenge admission. Lower scores are safer. The engine combines challenge type, source context, and authorization state before deciding whether automatic low-risk image text recognition is admissible.",
+    "weights": {
+      "challengeKinds": {
+        "none": 0,
+        "captcha_text": 1,
+        "captcha_arithmetic": 1,
+        "captcha": 3,
+        "captcha_slider": 5,
+        "captcha_click": 5,
+        "login": 5,
+        "rate_limit": 6,
+        "security_gate": 8,
+        "result_mismatch": 7,
+        "unknown": 6
+      },
+      "sourceTypes": {
+        "public": 0,
+        "public-low-risk": -1,
+        "authorized": -2,
+        "internal": -2,
+        "search-engine": 2,
+        "government": 3,
+        "government-strong": 4,
+        "judicial": 4,
+        "prohibited": 99,
+        "standard": 1
+      },
+      "context": {
+        "allowImageTextRecognition": -1,
+        "riskAcknowledged": -1,
+        "enterpriseDefaultAuto": -1,
+        "userOverride": 1,
+        "sourceIdOfficialStrong": 3
+      }
+    },
+    "thresholds": {
+      "autoImageTextMaxScore": 2,
+      "assistedMaxScore": 7
+    },
+    "autoImageTextKinds": [
+      "captcha_text",
+      "captcha_arithmetic"
+    ]
+  },
   "public": {
     "mode": "auto",
     "risk": "low",
-    "allowOcr": true,
+    "allowImageTextRecognition": false,
     "allowSessionReuse": true,
     "allowAssisted": true,
     "allowRetry": true
@@ -12,7 +61,7 @@
   "public-low-risk": {
     "mode": "auto",
     "risk": "low",
-    "allowOcr": true,
+    "allowImageTextRecognition": true,
     "allowSessionReuse": true,
     "allowAssisted": true,
     "allowRetry": true
@@ -20,7 +69,15 @@
   "authorized": {
     "mode": "auto",
     "risk": "low",
-    "allowOcr": true,
+    "allowImageTextRecognition": true,
+    "allowSessionReuse": true,
+    "allowAssisted": true,
+    "allowRetry": true
+  },
+  "internal": {
+    "mode": "auto",
+    "risk": "low",
+    "allowImageTextRecognition": true,
     "allowSessionReuse": true,
     "allowAssisted": true,
     "allowRetry": true
@@ -28,7 +85,7 @@
   "search-engine": {
     "mode": "auto",
     "risk": "low",
-    "allowOcr": false,
+    "allowImageTextRecognition": false,
     "allowSessionReuse": false,
     "allowAssisted": false,
     "allowRetry": true,
@@ -37,26 +94,33 @@
   "judicial": {
     "mode": "assisted",
     "risk": "high",
-    "allowOcr": false,
+    "allowImageTextRecognition": false,
     "allowSessionReuse": true,
     "allowAssisted": true
   },
-  "search:bing": {
+  "government-strong": {
     "mode": "assisted",
-    "risk": "standard",
-    "allowOcr": false,
-    "allowSessionReuse": false,
-    "allowAssisted": true,
-    "riskAcknowledged": true,
-    "note": "Example source-level override. Source ids can be found in audit logs."
-  },
-  "judicial:example-authorized-test": {
-    "mode": "auto",
     "risk": "high",
-    "allowOcr": true,
+    "allowImageTextRecognition": false,
+    "allowSessionReuse": true,
+    "allowAssisted": true
+  },
+  "internal-low-risk-demo": {
+    "mode": "auto",
+    "risk": "low",
+    "allowImageTextRecognition": true,
     "allowSessionReuse": true,
     "allowAssisted": true,
     "riskAcknowledged": true,
-    "note": "Example only. Use auto for high-risk sources only when the user confirms authorization and compliance responsibility."
+    "note": "Example of a low-risk source-level opt-in."
+  },
+  "judicial-zxgk-example": {
+    "mode": "auto",
+    "risk": "high",
+    "allowImageTextRecognition": true,
+    "allowSessionReuse": true,
+    "allowAssisted": true,
+    "riskAcknowledged": true,
+    "note": "Example of a rejected high-risk OCR opt-in. The centralized guardrail still routes official execution/judicial sources to managed official-page confirmation."
   }
 }

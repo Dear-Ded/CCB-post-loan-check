@@ -4,16 +4,23 @@ param(
 
   [string]$OrgCode = "",
 
+  [string[]]$Person = @(),
+
   [switch]$IncludeHealthCommission,
 
   [string]$OutputRoot = "",
 
-  [switch]$SkipJudicial,
+  [switch]$SmokeQuick,
+
+  [switch]$NoPrompt,
 
   [switch]$SkipSearch,
 
   [ValidateSet("auto", "assisted", "blocked")]
   [string]$JudicialMode = "assisted",
+
+  [ValidateSet("standard", "enhanced", "deep", "expert")]
+  [string]$Mode = "enhanced",
 
   [switch]$Json
 )
@@ -23,11 +30,33 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-$doubaoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$CommandPath = $MyInvocation.MyCommand.Path
+$doubaoRoot = if ([string]::IsNullOrWhiteSpace($CommandPath)) {
+  $candidate = Join-Path (Get-Location).Path "packages\doubao"
+  if (-not (Test-Path -LiteralPath $candidate)) {
+    $candidate = (Get-Location).Path
+  }
+  (Resolve-Path -LiteralPath $candidate).Path
+} else {
+  Split-Path -Parent $CommandPath
+}
 $projectRoot = Split-Path -Parent (Split-Path -Parent $doubaoRoot)
 $coreRoot = Join-Path $projectRoot "packages\core-skill"
 $singleRunner = Join-Path $coreRoot "scripts\run_post_loan_check.ps1"
 $batchRunner = Join-Path $coreRoot "scripts\run_batch_post_loan_check.ps1"
+
+function Invoke-LocalPowerShellScript {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$ScriptPath,
+
+    [hashtable]$Parameters = @{}
+  )
+
+  $scriptText = Get-Content -Raw -LiteralPath $ScriptPath
+  $scriptBlock = [scriptblock]::Create($scriptText)
+  & $scriptBlock @Parameters
+}
 
 function Write-TaskResult($ok, $message, $reportPath = "", $outputDir = "") {
   $result = [ordered]@{
@@ -45,6 +74,60 @@ function Write-TaskResult($ok, $message, $reportPath = "", $outputDir = "") {
   }
 }
 
+function Get-DefaultOutputRoot {
+  if ($OutputRoot) { return $OutputRoot }
+  if ($env:POST_LOAN_OUTPUT_ROOT) { return $env:POST_LOAN_OUTPUT_ROOT }
+  $productDirName = [string]::Concat(
+    [char]67, [char]67, [char]66,
+    [char]36151, [char]21069, [char]36151, [char]21518,
+    [char]26597, [char]35810
+  )
+  return (Join-Path ([Environment]::GetFolderPath("MyDocuments")) (Join-Path $productDirName "outputs"))
+}
+
+function Write-WrapperFailureSummary([string]$Reason, [string]$Phase = "doubao_local_wrapper") {
+  $root = Get-DefaultOutputRoot
+  New-Item -ItemType Directory -Path $root -Force | Out-Null
+  $runDir = Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+  $runDirPath = if ($runDir) {
+    $runDir.FullName
+  } else {
+    Join-Path $root ("wrapper-failure-{0}" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+  }
+  New-Item -ItemType Directory -Path $runDirPath -Force | Out-Null
+  $summaryPath = Join-Path $runDirPath "failure-summary.json"
+  if (-not (Test-Path -LiteralPath $summaryPath)) {
+    $payload = [ordered]@{
+      ok = $false
+      finalReportGenerated = $false
+      company = $CompanyName
+      orgCode = $OrgCode
+      mode = $Mode
+      judicialMode = $JudicialMode
+      phase = $Phase
+      reason = $Reason
+      runDir = $runDirPath
+      generatedAt = (Get-Date).ToString("o")
+      screenshots = @()
+      missingEvidence = @()
+      nextAction = "Inspect the run folder and retry the official source capture. A formal Word report was not generated."
+    }
+    $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+    @(
+      "# Query Failure Diagnostics",
+      "",
+      "- Company: $CompanyName",
+      "- Mode: $Mode",
+      "- Phase: $Phase",
+      "- Reason: $Reason",
+      "- Formal report: not generated"
+    ) | Set-Content -LiteralPath (Join-Path $runDirPath "failure-summary.md") -Encoding UTF8
+  }
+  return $summaryPath
+}
+
 try {
   $normalizedCompanies = $CompanyName.Replace([char]0x3001, ",").Replace([char]0xFF0C, ",").Replace([char]13, ",").Replace([char]10, ",")
   $companyItems = @()
@@ -53,39 +136,35 @@ try {
     if ($trimmed) { $companyItems += $trimmed }
   }
   $isBatch = $companyItems.Count -gt 1
+  if ($isBatch -and $Person.Count -gt 0) {
+    throw "Person execution checks are only supported for single-company runs."
+  }
 
   $runner = if ($isBatch) { $batchRunner } else { $singleRunner }
-  $argsList = @(
-    "-NoProfile",
-    "-ExecutionPolicy", "Bypass",
-    "-File", $runner,
-    "-CompanyName", $CompanyName,
-    "-TemplateSlots",
-    "-JudicialMode", $JudicialMode
-  )
-
-  if (-not [string]::IsNullOrWhiteSpace($OrgCode)) { $argsList += @("-OrgCode", $OrgCode) }
-  if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { $argsList += @("-OutputRoot", $OutputRoot) }
-  if ($IncludeHealthCommission) { $argsList += "-IncludeHealthCommission" }
-  if ($SkipJudicial -or $isBatch) { $argsList += "-SkipJudicial" }
-  if ($SkipSearch) { $argsList += "-SkipSearch" }
-  if ($isBatch -or $SkipJudicial) { $argsList += "-NoPrompt" }
-
-  $outputRootPath = if ($OutputRoot) {
-    $OutputRoot
-  } elseif ($env:POST_LOAN_OUTPUT_ROOT) {
-    $env:POST_LOAN_OUTPUT_ROOT
-  } else {
-    Join-Path ([Environment]::GetFolderPath("MyDocuments")) "CCB贷前贷后查询\outputs"
+  $runnerParameters = @{
+    CompanyName = $CompanyName
+    TemplateSlots = $true
+    JudicialMode = $JudicialMode
+    Mode = $Mode
   }
+
+  if (-not [string]::IsNullOrWhiteSpace($OrgCode)) { $runnerParameters.OrgCode = $OrgCode }
+  if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { $runnerParameters.OutputRoot = $OutputRoot }
+  if ($IncludeHealthCommission) { $runnerParameters.IncludeHealthCommission = $true }
+  if ($SmokeQuick) { $runnerParameters.SmokeQuick = $true }
+  if ($NoPrompt) { $runnerParameters.NoPrompt = $true }
+  if ($SkipSearch) { $runnerParameters.SkipSearch = $true }
+  if ($Person.Count -gt 0 -and -not $isBatch) { $runnerParameters.Person = $Person }
+
+  $outputRootPath = Get-DefaultOutputRoot
 
   $before = Get-Date
-  $childOutput = & powershell.exe @argsList 2>&1
-  if (-not $Json) { $childOutput | ForEach-Object { Write-Host $_ } }
-  if ($LASTEXITCODE -ne 0) {
-    Write-TaskResult $false "Doubao local task failed before report generation."
-    exit $LASTEXITCODE
+  if ($Json) {
+    $childOutput = Invoke-LocalPowerShellScript -ScriptPath $runner -Parameters $runnerParameters *> $null
+  } else {
+    $childOutput = Invoke-LocalPowerShellScript -ScriptPath $runner -Parameters $runnerParameters 2>&1
   }
+  if (-not $Json) { $childOutput | ForEach-Object { Write-Host $_ } }
 
   if ($isBatch) {
     $batchRoot = Get-ChildItem -LiteralPath $outputRootPath -Directory -Filter "batch-post-loan-*" |
@@ -119,6 +198,7 @@ try {
     exit 1
   }
 } catch {
-  Write-TaskResult $false ("Doubao local task failed: " + $_.Exception.Message)
+  $summaryPath = Write-WrapperFailureSummary -Reason $_.Exception.Message
+  Write-TaskResult $false ("Doubao local task failed: " + $_.Exception.Message) "" (Split-Path -Parent $summaryPath)
   exit 1
 }

@@ -7,7 +7,7 @@
   "fallbackExecution": "cloud-or-pc-worker",
   "inputContract": {
     "minFields": ["companyName"],
-    "optionalFields": ["orgCode", "batchList", "includeHealthCommission"]
+    "optionalFields": ["orgCode", "batchList", "mode", "personChecks", "includeHealthCommission"]
   },
   "resultContract": {
     "singleReportName": "贷后查询-{companyName}-{yyyyMMdd}.docx",
@@ -21,6 +21,6 @@
     "当前端能力不足时，手机端发起任务，云端或 PC worker 执行。",
     "后台 worker 必须保持与 PC/web 端一致的输出合同。",
     "批量任务只向用户暴露 reports，evidence 留作审计。",
-    "遇到登录或验证码时才请求用户接管。"
+    "遇到登录或页面挑战确认时才请求用户接管。"
   ]
 }

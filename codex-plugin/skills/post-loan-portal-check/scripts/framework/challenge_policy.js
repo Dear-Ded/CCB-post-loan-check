@@ -7,6 +7,10 @@ const ChallengeMode = Object.freeze({
 const ChallengeKind = Object.freeze({
   NONE: "none",
   CAPTCHA: "captcha",
+  CAPTCHA_TEXT: "captcha_text",
+  CAPTCHA_ARITHMETIC: "captcha_arithmetic",
+  CAPTCHA_SLIDER: "captcha_slider",
+  CAPTCHA_CLICK: "captcha_click",
   LOGIN: "login",
   RATE_LIMIT: "rate_limit",
   SECURITY_GATE: "security_gate",

@@ -2,47 +2,31 @@
 
 ## Codex
 
-Codex 使用本地插件形态：
+- Plugin directory: `codex-plugin/`
+- Core skill: `codex-plugin/skills/post-loan-portal-check/`
+- Display name: `CCB贷前贷后查询`
 
-- 插件目录：`codex-plugin/`
-- 核心 skill：`codex-plugin/skills/post-loan-portal-check/`
-- 插件显示名：`CCB贷前贷后查询`
-
-Codex 应在启动时一次性提示用户：
-
-- 登录中国裁判文书网。
-- 执行公开网可能需要登录。
-- 执行公开网页面可能多次加载失败，脚本会自动重试。
-- 执行公开网验证码可能多次错误或过期，只有确认查询结果/无结果后才截图。
+Codex should ask once at startup for any required login, page challenge confirmation, medical-source inclusion, and optional person execution checks. After that, the task should continue automatically and produce Word output.
 
 ## WorkBuddy
 
-WorkBuddy 适配目标是面向非技术用户：
+WorkBuddy targets non-technical users:
 
-- 使用表单收集企业名或批量企业名单、可选统一社会信用代码、是否医院/医疗机构、是否同步查法人/实控人。
-- 运行前执行预检，检查浏览器、脚本运行时、模板和输出目录。
-- 无司法查询时默认后台执行；只有登录/验证码需要用户时才打开前台。
-- 批量查询将最终 Word 集中在 `reports`，截图和审计留在 `evidence`。
-- 缺环境时输出人话提示，不要求用户理解 Node、Python、PowerShell 或路径。
+- Collect company names, optional unified social credit codes, medical-entity flag, and optional legal representative/controller person checks.
+- Run preflight before the task.
+- Open a visible browser only when a required source needs user confirmation.
+- For batch work, collect final Word files in `reports` and keep evidence in `evidence`.
 
-## 豆包任务模式
+## Doubao Office Task
 
-豆包任务模式适配按“可视化任务执行器”设计：
+Doubao can run the same contract through local browser automation, remote browser tasks, or cloud/PC workers.
 
-- PC 客户端：优先调用本地浏览器。
-- Web 端：按远程虚拟浏览器/云端浏览器任务理解，不依赖固定本机路径，必须遵守同一输入/输出契约。
-- 手机端：用户可通过任务模式发起任务，浏览器会话在可控环境中执行。
-- 批量任务最终交付 `reports` 中的 Word，`evidence` 仅作为证据链归档。
+- The mobile side may start the task and receive the result.
+- The execution side must return Word, a `reports` folder, or a download link.
+- Evidence remains archived for audit.
 
-豆包适配仍遵守同样边界：
+## Boundary
 
-- 登录和安全验证由用户接管。
-- 不绕过验证码。
-- 不确认结果页不截图。
-- 执行公开网加载失败要重试。
-
-## 分支约定
-
-- `Codex`：Codex 插件与本地 skill。
-- `workbuddy`：WorkBuddy 专家/skill 包。
-- `豆包`：豆包任务模式适配。
+- Login and page challenge confirmation are handled by user takeover or managed source policy.
+- Result pages must be confirmed before screenshots.
+- Judicial and execution sources are required for formal delivery.

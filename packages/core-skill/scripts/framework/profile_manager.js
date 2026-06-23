@@ -4,7 +4,9 @@ const path = require("path");
 
 class BrowserProfileManager {
   constructor(options = {}) {
-    this.root = options.root || path.join(os.homedir(), ".codex", "post-loan-portal-check", "profiles");
+    this.root = options.root ||
+      process.env.POST_LOAN_PROFILE_ROOT ||
+      path.join(process.env.POST_LOAN_OUTPUT_ROOT || process.cwd(), ".post-loan-profiles");
   }
 
   profilePath(scope) {

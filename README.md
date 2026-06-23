@@ -4,6 +4,8 @@
 
 目标平台：Codex、WorkBuddy、豆包办公任务。三个平台共用同一套核心脚本、同一套证据合同和同一套输出标准。
 
+公开仓库：https://github.com/Dear-Ded/CCB-post-loan-check
+
 ## 项目铁律
 
 - 不得模拟任何查询结果、截图、报告、证据或数据。

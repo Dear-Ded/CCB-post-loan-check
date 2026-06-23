@@ -8,14 +8,13 @@ function envFlag(name, fallback = false) {
 }
 
 function loadRuntimePolicy({ skillRoot = path.resolve(__dirname, "..", ".."), file = process.env.POST_LOAN_RUNTIME_POLICY, audit, investigationMode } = {}) {
-  const privilegedMode = investigationMode?.mode === "deep" || investigationMode?.mode === "expert";
   const defaults = {
     browserCompatibilityTuning: {
-      enabled: envFlag("POST_LOAN_BROWSER_COMPAT_TUNING", true),
+      enabled: envFlag("POST_LOAN_BROWSER_COMPAT_TUNING", false),
       chromiumArgs: []
     },
     lowRiskImageTextRecognition: {
-      enabled: envFlag("POST_LOAN_ENABLE_LOW_RISK_IMAGE_TEXT", privilegedMode),
+      enabled: envFlag("POST_LOAN_ENABLE_LOW_RISK_IMAGE_TEXT", false),
       provider: "none"
     },
     sessionStorage: {

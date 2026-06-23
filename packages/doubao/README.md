@@ -5,7 +5,7 @@ This package adapts `CCB贷前贷后查询` for Doubao App office-task mode on U
 ## Quick Load
 
 ```text
-加载 https://github.com/Dear-Ded/CCB- 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。
+加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。
 ```
 
 ## Hard Rules

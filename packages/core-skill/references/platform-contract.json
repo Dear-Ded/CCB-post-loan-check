@@ -4,7 +4,7 @@
   "version": "0.5.0",
   "productPrinciple": "跨平台一致：易搜索、易加载、一句话触发、输出质量稳定可靠。",
   "discoveryContract": {
-    "repositoryUrl": "https://github.com/Dear-Ded/CCB-",
+    "repositoryUrl": "https://github.com/Dear-Ded/CCB-post-loan-check",
     "primaryLoadFile": "LOAD_THIS_PROJECT.md",
     "keywords": [
       "CCB贷前贷后查询",
@@ -15,8 +15,8 @@
       "Chinese enterprise post-loan portal check",
       "CCB pre post loan query"
     ],
-    "oneSentenceSingle": "加载 https://github.com/Dear-Ded/CCB- 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。",
-    "oneSentenceBatch": "加载 https://github.com/Dear-Ded/CCB- 这个项目，使用 CCB贷前贷后查询，给以下企业批量生成贷后查询 Word，最后只给我 reports 文件夹。"
+    "oneSentenceSingle": "加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。",
+    "oneSentenceBatch": "加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，使用 CCB贷前贷后查询，给以下企业批量生成贷后查询 Word，最后只给我 reports 文件夹。"
   },
   "inputContract": {
     "single": {

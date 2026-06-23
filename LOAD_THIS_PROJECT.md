@@ -5,13 +5,13 @@
 ## 一句话触发
 
 ```text
-加载 https://github.com/Dear-Ded/CCB- 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。
+加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，使用 CCB贷前贷后查询，给 XXX 公司生成贷后查询 Word 报告。
 ```
 
 批量：
 
 ```text
-加载 https://github.com/Dear-Ded/CCB- 这个项目，使用 CCB贷前贷后查询，给以下企业批量生成贷后查询 Word，最后只给我 reports 文件夹：企业A、企业B、企业C。
+加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，使用 CCB贷前贷后查询，给以下企业批量生成贷后查询 Word，最后只给我 reports 文件夹：企业A、企业B、企业C。
 ```
 
 ## 平台优先读取顺序

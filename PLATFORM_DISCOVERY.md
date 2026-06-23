@@ -5,7 +5,7 @@
 本项目是公开 GitHub 仓库，任何平台都可以通过 URL 抓取：
 
 ```text
-https://github.com/Dear-Ded/CCB-
+https://github.com/Dear-Ded/CCB-post-loan-check
 ```
 
 平台是否能“只通过对话自动加载”，取决于该平台是否支持从 GitHub URL、公开仓库、skill 包或办公任务说明中导入工具。
@@ -23,7 +23,7 @@ https://github.com/Dear-Ded/CCB-
 推荐对话：
 
 ```text
-加载 https://github.com/Dear-Ded/CCB- 这个项目，并使用 CCB贷前贷后查询 给 XXX 公司生成贷后查询 Word 报告。
+加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，并使用 CCB贷前贷后查询 给 XXX 公司生成贷后查询 Word 报告。
 ```
 
 ## WorkBuddy
@@ -37,7 +37,7 @@ https://github.com/Dear-Ded/CCB-
 推荐对话：
 
 ```text
-导入 GitHub 项目 https://github.com/Dear-Ded/CCB-，按 WorkBuddy 专家包运行 CCB贷前贷后查询。
+导入 GitHub 项目 https://github.com/Dear-Ded/CCB-post-loan-check，按 WorkBuddy 专家包运行 CCB贷前贷后查询。
 ```
 
 ## 豆包办公任务
@@ -51,13 +51,13 @@ https://github.com/Dear-Ded/CCB-
 推荐对话：
 
 ```text
-打开并读取 https://github.com/Dear-Ded/CCB-，按 packages/doubao/office-task.md 的要求执行 CCB贷前贷后查询，最终交付 Word 或 reports 文件夹。
+打开并读取 https://github.com/Dear-Ded/CCB-post-loan-check，按 packages/doubao/office-task.md 的要求执行 CCB贷前贷后查询，最终交付 Word 或 reports 文件夹。
 ```
 
 豆包 App 推荐对话：
 
 ```text
-帮我加载 https://github.com/Dear-Ded/CCB- 这个项目，按豆包 App 手机端任务说明执行 CCB贷前贷后查询。企业名是 XXX，最后把 Word 或 reports 下载链接发给我。
+帮我加载 https://github.com/Dear-Ded/CCB-post-loan-check 这个项目，按豆包 App 手机端任务说明执行 CCB贷前贷后查询。企业名是 XXX，最后把 Word 或 reports 下载链接发给我。
 ```
 
 ## 搜索关键词

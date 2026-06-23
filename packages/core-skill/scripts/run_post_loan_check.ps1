@@ -13,8 +13,8 @@ param(
   [switch]$SmokeQuick,
   [switch]$SkipSearch,
 
-[ValidateSet("standard", "enhanced", "deep", "expert")]
-[string]$Mode = "enhanced",
+[ValidateSet("", "standard", "enhanced", "deep", "expert")]
+[string]$Mode = "",
 
   [ValidateSet("auto", "assisted", "blocked")]
   [string]$JudicialMode = "assisted",
@@ -89,6 +89,38 @@ function Write-Stage([string]$Message) {
   Write-Host $Message
 }
 
+function Get-EffectiveModeInfo([string]$RunDirectory) {
+  $info = [ordered]@{ mode = $Mode; settingsMode = "" }
+  $auditPath = Join-Path $RunDirectory "audit-events.json"
+  if (-not (Test-Path -LiteralPath $auditPath)) { return $info }
+  try {
+    $audit = Get-Content -Raw -Encoding UTF8 -LiteralPath $auditPath | ConvertFrom-Json
+    $modeEvent = @($audit | Where-Object { $_.type -eq "investigation_mode_resolved" } | Select-Object -Last 1)
+    if ($modeEvent.Count -gt 0) {
+      if (-not [string]::IsNullOrWhiteSpace([string]$modeEvent[0].mode)) { $info.mode = [string]$modeEvent[0].mode }
+      if (-not [string]::IsNullOrWhiteSpace([string]$modeEvent[0].settingsMode)) { $info.settingsMode = [string]$modeEvent[0].settingsMode }
+    }
+  } catch {}
+  return $info
+}
+
+function Get-JudicialDiagnosticsSummary([string]$RunDirectory) {
+  $diagnosticScript = Join-Path $SkillRoot "scripts\framework\judicial_diagnostics.js"
+  if (-not (Test-Path -LiteralPath $diagnosticScript)) { return $null }
+  try {
+    $diagCode = @"
+const { summarizeJudicialDiagnostics } = require(process.argv[1]);
+const result = summarizeJudicialDiagnostics({ runDir: process.argv[2] });
+console.log(JSON.stringify(result));
+"@
+    $diagJson = & $NodeExe -e $diagCode $diagnosticScript $RunDirectory
+    if ($LASTEXITCODE -eq 0 -and $diagJson) { return ($diagJson | ConvertFrom-Json) }
+  } catch {
+    return [ordered]@{ ok = $false; error = $_.Exception.Message }
+  }
+  return $null
+}
+
 function Write-FailureSummary([string]$Reason, [string]$Phase) {
   $screenshots = @(Get-ChildItem -LiteralPath $runDir -Filter "*.png" -ErrorAction SilentlyContinue |
     Sort-Object Name |
@@ -106,6 +138,9 @@ function Write-FailureSummary([string]$Reason, [string]$Phase) {
   }
   $auditPath = Join-Path $runDir "audit-events.json"
   $auditSignals = @()
+  $modeInfo = Get-EffectiveModeInfo -RunDirectory $runDir
+  $effectiveMode = $modeInfo.mode
+  $settingsMode = $modeInfo.settingsMode
   $judicialDiagnostics = $null
   if (Test-Path -LiteralPath $auditPath) {
     try {
@@ -117,28 +152,15 @@ function Write-FailureSummary([string]$Reason, [string]$Phase) {
       $auditSignals = @([ordered]@{ type = "audit_parse_failed"; error = $_.Exception.Message })
     }
   }
-  $diagnosticScript = Join-Path $SkillRoot "scripts\framework\judicial_diagnostics.js"
-  if (Test-Path -LiteralPath $diagnosticScript) {
-    try {
-      $diagCode = @"
-const { summarizeJudicialDiagnostics } = require(process.argv[1]);
-const result = summarizeJudicialDiagnostics({ runDir: process.argv[2] });
-console.log(JSON.stringify(result));
-"@
-      $diagJson = & $NodeExe -e $diagCode $diagnosticScript $runDir
-      if ($LASTEXITCODE -eq 0 -and $diagJson) {
-        $judicialDiagnostics = $diagJson | ConvertFrom-Json
-      }
-    } catch {
-      $judicialDiagnostics = [ordered]@{ ok = $false; error = $_.Exception.Message }
-    }
-  }
+  $judicialDiagnostics = Get-JudicialDiagnosticsSummary -RunDirectory $runDir
   $payload = [ordered]@{
     ok = $false
     finalReportGenerated = $false
     company = $CompanyName
     orgCode = $OrgCode
-    mode = $Mode
+    mode = $effectiveMode
+    requestedMode = $Mode
+    settingsMode = $settingsMode
     judicialMode = $JudicialMode
     phase = $Phase
     reason = $Reason
@@ -209,6 +231,9 @@ function Format-RequiredEvidenceSummary([object[]]$MissingEvidence) {
 }
 
 function Write-MinimalFailureSummary([string]$Reason, [string]$Phase, [string]$ManifestPath = "") {
+  $modeInfo = Get-EffectiveModeInfo -RunDirectory $runDir
+  $effectiveMode = $modeInfo.mode
+  $settingsMode = $modeInfo.settingsMode
   $missingEvidence = @(Get-RequiredEvidenceSummary -ManifestPath $ManifestPath)
   $evidenceSummary = Format-RequiredEvidenceSummary -MissingEvidence $missingEvidence
   $effectiveReason = $Reason
@@ -239,12 +264,15 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase, [string]$M
   } else {
     "run_failed"
   }
+  $judicialDiagnostics = Get-JudicialDiagnosticsSummary -RunDirectory $runDir
   $payload = [ordered]@{
     ok = $false
     finalReportGenerated = $false
     company = $CompanyName
     orgCode = $OrgCode
-    mode = $Mode
+    mode = $effectiveMode
+    requestedMode = $Mode
+    settingsMode = $settingsMode
     judicialMode = $JudicialMode
     phase = $Phase
     reason = $effectiveReason
@@ -252,14 +280,14 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase, [string]$M
     generatedAt = (Get-Date).ToString("o")
     screenshots = $screenshots
     missingEvidence = $missingEvidence
-    judicialDiagnostics = [ordered]@{
+    judicialDiagnostics = if ($judicialDiagnostics) { $judicialDiagnostics } else { [ordered]@{
       ok = $false
       categories = @([ordered]@{
         category = $category
         count = 1
         samples = @([ordered]@{ type = "timeout"; reason = $Reason })
       })
-    }
+    }}
     nextAction = $nextAction
   }
   $jsonPath = Join-Path $runDir "failure-summary.json"
@@ -269,7 +297,7 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase, [string]$M
     "# Query Failure Diagnostics",
     "",
     "- Company: $CompanyName",
-    "- Mode: $Mode",
+    "- Mode: $effectiveMode",
     "- Phase: $Phase",
     "- Reason: $effectiveReason",
     "- Real screenshots captured: $($screenshots.Count)",

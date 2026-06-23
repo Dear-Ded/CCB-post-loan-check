@@ -36,6 +36,44 @@ function classifyMessage(message) {
   return text ? "other" : "unknown";
 }
 
+function classifyOfficialPageProbe(probe = {}) {
+  const text = String(probe.textSample || probe.text || "");
+  const title = String(probe.title || "");
+  const url = String(probe.url || "");
+  const combined = `${title} ${text} ${url}`;
+  const statuses = asArray(probe.responses)
+    .map((item) => Number(item.status))
+    .filter((status) => Number.isFinite(status));
+  const hasBadOfficialResponse = statuses.some((status) => status === 400 || status === 403 || status >= 500);
+  const textBlank = text.trim().length < 20 && title.trim().length === 0;
+
+  if (probe.hasResultState || /查询结果|检索结果|搜索结果|暂无数据|未检索到|案号|执行法院|裁判日期/.test(combined)) {
+    return "official_result_state";
+  }
+  if (probe.hasNameField && (probe.hasChallengeField || probe.hasSearchButton)) {
+    return "official_form_ready";
+  }
+  if (/登录|请登录|用户登录|login/i.test(combined)) {
+    return "session_or_login_required";
+  }
+  if (/验证码|校验码|安全验证|访问异常|captcha|challenge|verify/i.test(combined)) {
+    return "page_challenge_unresolved";
+  }
+  if (hasBadOfficialResponse) {
+    return "waf_or_static_resource_blocked";
+  }
+  if (textBlank || probe.blank === true) {
+    return "blank_or_empty_official_page";
+  }
+  if (/Bad Request|Forbidden|Service Unavailable|系统繁忙|页面不存在/i.test(combined)) {
+    return classifyMessage(combined);
+  }
+  if (probe.hasNameField || probe.hasChallengeField) {
+    return "partial_form_loaded";
+  }
+  return "entry_or_page_unavailable";
+}
+
 function classifyEvents(events) {
   const categories = new Map();
   const add = (category, event) => {
@@ -49,6 +87,9 @@ function classifyEvents(events) {
     if (/judgment_portal_capture_failed/.test(type)) add(classifyMessage(message), event);
     if (/enforcement_captcha_attempt_failed|enforcement_captcha_changed_before_submit/.test(type)) add("page_challenge_unresolved", event);
     if (/enforcement_page_recovered/.test(type)) add("entry_or_page_unavailable", event);
+    if (/official_route_preflight|enforcement_official_route_unusable|enforcement_ready_probe_failed/.test(type)) {
+      add(event.category || classifyOfficialPageProbe(event.probe || event), event);
+    }
     if (/judicial_source_failure|judicial_attempt_failed/.test(type)) add(classifyMessage(message), event);
     if (/enforcement_response/.test(type) && (Number(event.status) === 400 || Number(event.status) === 403)) {
       add("waf_or_static_resource_blocked", event);
@@ -139,6 +180,7 @@ function summarizeJudicialDiagnostics({ runDir, manifestPath } = {}) {
 
 module.exports = {
   classifyEvents,
+  classifyOfficialPageProbe,
   classifyMessage,
   summarizeJudicialDiagnostics
 };

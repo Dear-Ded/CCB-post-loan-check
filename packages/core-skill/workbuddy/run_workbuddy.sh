@@ -8,7 +8,7 @@ COMPANY_NAME=""
 ORG_CODE=""
 PERSON_VALUES=()
 OUTPUT_ROOT=""
-MODE="${POST_LOAN_INVESTIGATION_MODE:-enhanced}"
+MODE="${POST_LOAN_INVESTIGATION_MODE:-}"
 JUDICIAL_MODE="assisted"
 INCLUDE_HEALTH="0"
 SKIP_SEARCH="0"
@@ -20,7 +20,7 @@ while [[ $# -gt 0 ]]; do
     --org-code|-OrgCode) ORG_CODE="${2:-}"; shift 2 ;;
     --person|-Person) PERSON_VALUES+=("${2:-}"); shift 2 ;;
     --output-root|-OutputRoot) OUTPUT_ROOT="${2:-}"; shift 2 ;;
-    --mode|-Mode) MODE="${2:-enhanced}"; shift 2 ;;
+    --mode|-Mode) MODE="${2:-}"; shift 2 ;;
     --judicial-mode|-JudicialMode) JUDICIAL_MODE="${2:-assisted}"; shift 2 ;;
     --include-health-commission|-IncludeHealthCommission) INCLUDE_HEALTH="1"; shift ;;
     --skip-search|-SkipSearch) SKIP_SEARCH="1"; shift ;;
@@ -34,7 +34,8 @@ if [[ -z "$COMPANY_NAME" ]]; then
   exit 2
 fi
 
-args=("$DOUBAO_RUNNER" "--company" "$COMPANY_NAME" "--mode" "$MODE" "--judicial-mode" "$JUDICIAL_MODE")
+args=("$DOUBAO_RUNNER" "--company" "$COMPANY_NAME" "--judicial-mode" "$JUDICIAL_MODE")
+[[ -n "$MODE" ]] && args+=("--mode" "$MODE")
 [[ -n "$ORG_CODE" ]] && args+=("--org-code" "$ORG_CODE")
 for person in "${PERSON_VALUES[@]}"; do
   args+=("--person" "$person")

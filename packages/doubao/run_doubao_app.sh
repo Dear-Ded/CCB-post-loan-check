@@ -10,7 +10,7 @@ ORG_CODE=""
 PERSON_VALUES=()
 OUTPUT_ROOT="${POST_LOAN_OUTPUT_ROOT:-$ROOT_DIR/outputs/doubao-app}"
 JUDICIAL_MODE="assisted"
-MODE="${POST_LOAN_INVESTIGATION_MODE:-enhanced}"
+MODE="${POST_LOAN_INVESTIGATION_MODE:-}"
 INCLUDE_HEALTH="0"
 SMOKE_QUICK="0"
 NO_PROMPT="0"
@@ -26,7 +26,7 @@ while [[ $# -gt 0 ]]; do
     --person) PERSON_VALUES+=("${2:-}"); shift 2 ;;
     --output-root) OUTPUT_ROOT="${2:-}"; shift 2 ;;
     --judicial-mode) JUDICIAL_MODE="${2:-assisted}"; shift 2 ;;
-    --mode) MODE="${2:-enhanced}"; shift 2 ;;
+    --mode) MODE="${2:-}"; shift 2 ;;
     --include-health-commission) INCLUDE_HEALTH="1"; shift ;;
     --smoke-quick) SMOKE_QUICK="1"; shift ;;
     --no-prompt) NO_PROMPT="1"; shift ;;
@@ -178,9 +178,10 @@ run_single() {
   run_dir="$OUTPUT_ROOT/${company}-${stamp}"
   mkdir -p "$run_dir"
   log_file="$run_dir/run.log"
-  printf 'runtime node=%s python=%s mode=%s\n' "$NODE_BIN" "$PYTHON_BIN" "$MODE" >>"$log_file"
+  printf 'runtime node=%s python=%s mode=%s\n' "$NODE_BIN" "$PYTHON_BIN" "${MODE:-settings}" >>"$log_file"
 
-  args=("$SCRIPT_DIR/capture_template_slots.js" "--company" "$company" "--out-dir" "$run_dir" "--judicial-mode" "$JUDICIAL_MODE" "--mode" "$MODE" "--headless" "--no-prompt")
+  args=("$SCRIPT_DIR/capture_template_slots.js" "--company" "$company" "--out-dir" "$run_dir" "--judicial-mode" "$JUDICIAL_MODE" "--headless" "--no-prompt")
+  [[ -n "$MODE" ]] && args+=("--mode" "$MODE")
   [[ -n "$code" ]] && args+=("--org-code" "$code")
   [[ "$INCLUDE_HEALTH" == "1" ]] && args+=("--include-health-commission")
   [[ "$SMOKE_QUICK" == "1" ]] && args+=("--smoke-quick")

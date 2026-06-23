@@ -14,8 +14,8 @@ param(
   [ValidateSet("auto", "assisted", "blocked")]
   [string]$JudicialMode = "assisted",
 
-  [ValidateSet("standard", "enhanced", "deep", "expert")]
-  [string]$Mode = "enhanced",
+  [ValidateSet("", "standard", "enhanced", "deep", "expert")]
+  [string]$Mode = "",
 
   [switch]$NoPrompt,
   [switch]$TemplateSlots

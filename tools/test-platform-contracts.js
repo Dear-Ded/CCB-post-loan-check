@@ -29,6 +29,8 @@ assertContains("packages/doubao/run_doubao_app.sh", /PERSON_VALUES=\(\)/, "must 
 assertContains("packages/doubao/run_doubao_app.sh", /args\+=\("--person" "\$person"\)/, "must forward personal enforcement subjects");
 assertContains("packages/doubao/run_doubao_app.sh", "--smoke-quick", "must accept internal smoke flag used by acceptance tooling");
 assertContains("packages/doubao/run_doubao_app.sh", "--mode", "must accept investigation mode");
+assertContains("packages/doubao/run_doubao_app.sh", /MODE="\$\{POST_LOAN_INVESTIGATION_MODE:-\}"/, "Doubao Linux runner must not force enhanced mode over saved settings");
+assertContains("packages/doubao/run_doubao_app.sh", /\[\[ -n "\$MODE" \]\] && args\+=\("--mode" "\$MODE"\)/, "Doubao Linux runner must only pass mode when explicitly configured");
 assertContains("packages/doubao/run_doubao_app.sh", "write_failure_summary", "must create structured failure summaries on Linux/Doubao failures");
 assertContains("packages/doubao/run_doubao_app.sh", "finalReportGenerated", "must explicitly mark failed non-final runs");
 
@@ -40,9 +42,20 @@ for (const file of [
 ]) {
   assertContains(file, "[string[]]$Person", "must expose Person parameter");
   assertContains(file, "Mode", "must expose investigation mode");
+  assertContains(file, '[string]$Mode = ""', "must not force enhanced mode over saved settings");
   assertContains(file, "Person execution checks are only supported for single-company runs", "must reject person checks in batch mode");
   assertContains(file, "Write-WrapperFailureSummary", "must create structured wrapper failure summaries");
   assertContains(file, "finalReportGenerated", "must explicitly mark failed non-final wrapper runs");
+}
+
+for (const file of [
+  "packages/core-skill/scripts/run_post_loan_check.ps1",
+  "packages/core-skill/scripts/run_batch_post_loan_check.ps1",
+  "codex-plugin/skills/post-loan-portal-check/scripts/run_post_loan_check.ps1",
+  "codex-plugin/skills/post-loan-portal-check/scripts/run_batch_post_loan_check.ps1"
+]) {
+  assertContains(file, '[ValidateSet("", "standard", "enhanced", "deep", "expert")]', "core runners must allow empty mode so saved settings can take effect");
+  assertContains(file, '[string]$Mode = ""', "core runners must not force enhanced mode over saved settings");
 }
 
 assertJsonField("packages/core-skill/references/platform-contract.json", (payload) => {

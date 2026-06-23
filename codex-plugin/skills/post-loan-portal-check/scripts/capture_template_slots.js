@@ -28,6 +28,7 @@ const {
   isResultState: isEnforcementModuleResultState,
   waitForCaptchaChange
 } = require("./framework/enforcement_source");
+const { classifyOfficialPageProbe } = require("./framework/judicial_diagnostics");
 
 function parseArgs(argv) {
   const out = { person: [] };
@@ -633,6 +634,7 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
 
     const text = await pageText(page);
     const probe = await enforcementPageProbe(page).catch((error) => ({ error: String(error.message || error), textSample: text.slice(0, 300) }));
+    const category = classifyOfficialPageProbe(probe);
     const routeLooksUnusable = !formReady && !captchaReady && (
       String(probe.textSample || text || "").trim().length < 20 ||
       /400|403|Forbidden|Bad Request|页面不存在|访问异常|系统繁忙|Service Unavailable/i.test(`${probe.title || ""} ${probe.textSample || ""}`)
@@ -642,6 +644,7 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
         label,
         attempt,
         route: route.id,
+        category,
         probe
       });
       await saveOfficialPageDiagnostic(page, options.outDir, `zxgk-${route.id}-attempt-${attempt}`, audit, {
@@ -668,11 +671,13 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
     if (attempt < maxAttempts) {
       console.log(`${label} query page is not ready; retrying ${attempt + 1}/${maxAttempts}.`);
     }
+    const failedProbe = await enforcementPageProbe(page).catch((error) => ({ error: String(error.message || error) }));
       audit?.record("enforcement_ready_probe_failed", {
         label,
         attempt,
         route: route.id,
-        probe: await enforcementPageProbe(page).catch((error) => ({ error: String(error.message || error) }))
+        category: classifyOfficialPageProbe(failedProbe),
+        probe: failedProbe
       });
     await page.waitForTimeout((options.noPrompt ? 1000 : 4000) * attempt);
   }
@@ -739,7 +744,8 @@ async function waitForJudgmentResultPage(page, company, beforeUrl, timeoutMs = 3
   }, timeoutMs);
 }
 
-async function fillAndSearchJudgments(page, company, audit) {
+async function fillAndSearchJudgments(page, company, audit, options = {}) {
+  const resultWaitMs = Number(options.resultWaitMs || process.env.POST_LOAN_JUDGMENT_RESULT_WAIT_MS || 12000);
   const initialText = await pageText(page);
   if (page.url().includes("wenshu.court.gov.cn") && (initialText.includes(company) || hasJudgmentResultState(initialText))) {
     return;
@@ -798,12 +804,12 @@ async function fillAndSearchJudgments(page, company, audit) {
         page.waitForLoadState("networkidle", { timeout: 15000 }),
         button.click({ delay: 80 })
       ]);
-      await waitForJudgmentResultPage(page, company, beforeUrl, 30000).catch(() => {});
+      await waitForJudgmentResultPage(page, company, beforeUrl, resultWaitMs).catch(() => {});
       return;
     }
   }
   await page.keyboard.press("Enter");
-  await waitForJudgmentResultPage(page, company, beforeUrl, 30000).catch(() => {});
+  await waitForJudgmentResultPage(page, company, beforeUrl, resultWaitMs).catch(() => {});
 }
 
 async function captureJudgmentPortal(page, shots, add, company, audit, scheduler, options = {}) {
@@ -829,7 +835,9 @@ async function captureJudgmentPortal(page, shots, add, company, audit, scheduler
       writeStage(`judgment route loaded ${route.id}`);
       const beforeSearchText = await pageText(currentPage);
       if (!await isJudgmentLoginPage(currentPage, beforeSearchText)) {
-        await fillAndSearchJudgments(currentPage, company, audit);
+        await fillAndSearchJudgments(currentPage, company, audit, {
+          resultWaitMs: Number(options.resultWaitMs || process.env.POST_LOAN_JUDGMENT_RESULT_WAIT_MS || 12000)
+        });
       }
       await currentPage.waitForTimeout(settleBaseMs + attempt * 1000);
       const judgmentShot = await capture(currentPage, shots, "中国裁判文书网", file, 0, { company, audit });
@@ -1573,6 +1581,7 @@ async function main() {
         (signal) => captureJudgmentPortal(judgmentPage, shots, add, company, audit, judicialScheduler, {
           attempts: investigationMode.judgmentAttempts,
           settleBaseMs: investigationMode.judgmentSettleBaseMs,
+          resultWaitMs: investigationMode.mode === "expert" ? 18000 : (investigationMode.mode === "deep" ? 15000 : 12000),
           outDir,
           signal,
           ignoreCooldown: true

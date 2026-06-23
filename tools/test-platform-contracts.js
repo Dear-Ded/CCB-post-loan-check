@@ -33,16 +33,6 @@ assertContains("packages/doubao/run_doubao_app.sh", "write_failure_summary", "mu
 assertContains("packages/doubao/run_doubao_app.sh", "finalReportGenerated", "must explicitly mark failed non-final runs");
 
 for (const file of [
-  "packages/core-skill/workbuddy/run_workbuddy.sh",
-  "codex-plugin/skills/post-loan-portal-check/workbuddy/run_workbuddy.sh"
-]) {
-  assertContains(file, "--person", "must accept personal enforcement subject input");
-  assertContains(file, /PERSON_VALUES=\(\)/, "must store personal enforcement subjects");
-  assertContains(file, /args\+=\("--person" "\$person"\)/, "must forward personal enforcement subjects to the shared runner");
-  assertContains(file, "--mode", "must forward investigation mode");
-}
-
-for (const file of [
   "packages/doubao/run_doubao_local.ps1",
   "packages/doubao/run_doubao_mobile.ps1",
   "packages/core-skill/workbuddy/run_workbuddy.ps1",
@@ -56,10 +46,47 @@ for (const file of [
 }
 
 assertJsonField("packages/core-skill/references/platform-contract.json", (payload) => {
+  assert(Array.isArray(payload.hardRules), "platform contract must keep hard rules");
+  assert(payload.hardRules.some((rule) => /不得模拟任何查询结果/.test(rule)), "platform contract must forbid simulated content");
+  assert(payload.hardRules.some((rule) => /不得胡编乱造任何内容/.test(rule)), "platform contract must forbid invented content");
   assert(payload.inputContract?.single?.mode, "platform contract must document mode input");
   assert(payload.inputContract?.single?.personChecks, "platform contract must document personChecks input");
+  assert(payload.platforms?.workbuddy?.mobileSupport === "unsupported", "platform contract must mark WorkBuddy mobile unsupported");
+  assert(payload.platforms?.workbuddy?.singleEntrypoint === "workbuddy/run_workbuddy.ps1", "platform contract must keep WorkBuddy Windows desktop entrypoint");
   assert(payload.platforms?.doubao?.linuxEntrypoint === "packages/doubao/run_doubao_app.sh", "platform contract must keep Doubao Linux entrypoint");
+  assert((payload.platforms?.doubao?.supportedSurfaces || []).includes("mobileLinuxOfficeTask"), "platform contract must mark Doubao App mobile as Linux office-task runtime");
 });
+
+for (const file of [
+  "packages/core-skill/workbuddy/package-manifest.json",
+  "codex-plugin/skills/post-loan-portal-check/workbuddy/package-manifest.json"
+]) {
+  assertJsonField(file, (payload) => {
+    assert(payload.desktopEntrypoint === "workbuddy/run_workbuddy.ps1", "WorkBuddy manifest must expose desktop Windows entrypoint");
+    assert(!payload.mobileEntrypoint, "WorkBuddy manifest must not expose mobile entrypoint");
+    assert(!payload.entrypoints?.mobileLinux, "WorkBuddy manifest must not expose mobile Linux entrypoint");
+    assert(!(payload.requiredFiles || []).includes("workbuddy/run_workbuddy.sh"), "WorkBuddy package must not require mobile bash runner");
+  });
+}
+
+for (const file of [
+  "packages/core-skill/workbuddy/expert.json",
+  "codex-plugin/skills/post-loan-portal-check/workbuddy/expert.json"
+]) {
+  assertJsonField(file, (payload) => {
+    assert(payload.platforms?.desktop?.entrypoint === "workbuddy/run_workbuddy.ps1", "WorkBuddy expert must expose desktop runner");
+    assert(!payload.platforms?.mobile, "WorkBuddy expert must not expose mobile runner");
+    assert((payload.startupNotice || []).some((line) => /只有电脑版 Windows/.test(line)), "WorkBuddy expert must tell users desktop-only status");
+  });
+}
+
+for (const file of [
+  "packages/core-skill/references/workbuddy-adapter.md",
+  "codex-plugin/skills/post-loan-portal-check/references/workbuddy-adapter.md"
+]) {
+  assertContains(file, "one supported platform entrypoint", "WorkBuddy adapter must be desktop-only");
+  assertContains(file, "WorkBuddy mobile: unsupported", "WorkBuddy adapter must mark mobile unsupported");
+}
 
 assertJsonField("packages/doubao/task-mode.json", (payload) => {
   assert(Array.isArray(payload.hardRules), "Doubao task contract must keep hard rules");

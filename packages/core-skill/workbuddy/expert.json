@@ -8,11 +8,6 @@
       "os": "Windows",
       "entrypoint": "workbuddy/run_workbuddy.ps1",
       "commandTemplate": ".\\workbuddy\\run_workbuddy.ps1 -CompanyName \"{companyName}\" {orgCodeArg} {personArgs} -Mode \"{mode}\" {healthArg} -Json"
-    },
-    "mobile": {
-      "os": "Linux",
-      "entrypoint": "workbuddy/run_workbuddy.sh",
-      "commandTemplate": "bash workbuddy/run_workbuddy.sh --company \"{companyName}\" {orgCodeArg} {personArgs} --mode \"{mode}\" {healthArg} --json"
     }
   },
   "inputs": [
@@ -41,8 +36,8 @@
     { "name": "personArgs", "label": "个人被执行查询", "type": "text", "required": false, "help": "多个时可用换行或逗号分隔，每项格式为 姓名|身份证号。" }
   ],
   "startupNotice": [
-    "WorkBuddy 电脑端是 Windows，使用 PowerShell 入口。",
-    "WorkBuddy 手机端是 Linux，使用 bash 入口。",
+    "WorkBuddy 只有电脑版 Windows 入口可正常运行，使用 PowerShell 入口。",
+    "WorkBuddy 手机端不作为可用运行入口；Linux 手机办公任务请使用豆包 App。",
     "正式司法/执行报告要求法院官方页面成功查询截图；补充材料不能替代正式证据。",
     "不得模拟、不得生成样例、不得编造数据。"
   ],

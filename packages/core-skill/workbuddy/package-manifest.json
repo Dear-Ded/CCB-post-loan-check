@@ -3,14 +3,11 @@
   "name": "CCB贷前贷后查询",
   "version": "0.5.0",
   "desktopEntrypoint": "workbuddy/run_workbuddy.ps1",
-  "mobileEntrypoint": "workbuddy/run_workbuddy.sh",
   "entrypoints": {
-    "desktopWindows": "workbuddy/run_workbuddy.ps1",
-    "mobileLinux": "workbuddy/run_workbuddy.sh"
+    "desktopWindows": "workbuddy/run_workbuddy.ps1"
   },
   "preflight": {
-    "desktopWindows": "scripts/preflight_workbuddy.ps1",
-    "mobileLinux": "packages/doubao/preflight_doubao_app.sh"
+    "desktopWindows": "scripts/preflight_workbuddy.ps1"
   },
   "expertConfig": "workbuddy/expert.json",
   "requiredFiles": [
@@ -51,12 +48,11 @@
     "references/workbuddy-adapter.md",
     "references/workbuddy-expert.json",
     "workbuddy/expert.json",
-    "workbuddy/run_workbuddy.ps1",
-    "workbuddy/run_workbuddy.sh"
+    "workbuddy/run_workbuddy.ps1"
   ],
   "platformRules": {
-    "desktopWindows": "Use PowerShell runner. Do not call bash-only entrypoints.",
-    "mobileLinux": "Use bash runner. Do not call PowerShell or Windows paths."
+    "desktopWindows": "WorkBuddy only supports the Windows desktop runner for this project. Do not expose a WorkBuddy mobile/Linux entrypoint.",
+    "mobile": "Unsupported in WorkBuddy. Use Doubao App office-task mode for Linux mobile execution."
   },
   "userInteraction": {
     "startupOnly": true,
@@ -67,6 +63,7 @@
     ]
   },
   "knownLimits": [
+    "WorkBuddy 只有电脑版 Windows 入口经过支持；WorkBuddy 手机端不作为可用运行入口。",
     "正式交付必须包含司法和执行结果证据或明确缺口。",
     "不得生成模拟报告、样例截图或编造数据。",
     "企业代码自动查询受公开结果影响；不确定时要求补充。"

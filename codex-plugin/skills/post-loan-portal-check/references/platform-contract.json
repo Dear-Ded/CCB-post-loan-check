@@ -3,6 +3,12 @@
   "productName": "CCB贷前贷后查询",
   "version": "0.5.0",
   "productPrinciple": "跨平台一致：易搜索、易加载、一句话触发、输出质量稳定可靠。",
+  "hardRules": [
+    "不得模拟任何查询结果、截图、报告、证据或数据。",
+    "不得胡编乱造任何内容，包括企业信息、司法/执行结果、身份证号、来源链接、截图状态和失败原因。",
+    "未拿到真实结果页或真实无结果页时，必须返回真实失败原因、补证清单或可重试状态，不得伪装成功。",
+    "所有平台适配都必须原原本本执行项目脚本，不得用演示报告、样例截图、缓存想象结果替代真实查询。"
+  ],
   "discoveryContract": {
     "repositoryUrl": "https://github.com/Dear-Ded/CCB-post-loan-check",
     "primaryLoadFile": "LOAD_THIS_PROJECT.md",
@@ -53,7 +59,7 @@
   ],
   "platforms": {
     "codex": { "mode": "local-plugin-skill", "singleEntrypoint": "scripts/run_post_loan_check.ps1", "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1" },
-    "workbuddy": { "mode": "skill-expert-expert-group", "singleEntrypoint": "workbuddy/run_workbuddy.ps1", "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1" },
-    "doubao": { "mode": "office-task-browser-agent", "skillFile": "packages/doubao/SKILL.md", "mobileTaskFile": "packages/doubao/mobile-task.md", "linuxEntrypoint": "packages/doubao/run_doubao_app.sh" }
+    "workbuddy": { "mode": "skill-expert-expert-group", "supportedSurfaces": ["desktopWindows"], "mobileSupport": "unsupported", "singleEntrypoint": "workbuddy/run_workbuddy.ps1", "batchEntrypoint": "scripts/run_batch_post_loan_check.ps1" },
+    "doubao": { "mode": "office-task-browser-agent", "supportedSurfaces": ["mobileLinuxOfficeTask", "linuxBrowserTask", "desktopWindowsLocal"], "skillFile": "packages/doubao/SKILL.md", "mobileTaskFile": "packages/doubao/mobile-task.md", "linuxEntrypoint": "packages/doubao/run_doubao_app.sh" }
   }
 }

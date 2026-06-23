@@ -4,9 +4,8 @@
   "description": "输入企业名称后，查询贷前贷后外部门户信息，校验真实截图证据并生成 Word 报告。",
   "audience": "nonTechnical",
   "desktopEntrypoint": "workbuddy/run_workbuddy.ps1",
-  "mobileEntrypoint": "workbuddy/run_workbuddy.sh",
   "desktopOs": "Windows",
-  "mobileOs": "Linux",
+  "mobileSupport": "unsupported",
   "defaultMode": "enhanced",
   "modes": [
     { "value": "standard", "label": "标准模式", "description": "安全稳定，适合普通查询。" },
@@ -15,8 +14,9 @@
     { "value": "expert", "label": "专家模式", "description": "成功率优先的最积极可审计配置，需确认风险说明。" }
   ],
   "rules": [
-    "电脑端使用 Windows PowerShell 入口。",
-    "手机端使用 Linux bash 入口。",
+    "WorkBuddy 只有电脑版 Windows 入口可正常运行。",
+    "不要向 WorkBuddy 用户暴露手机端或 Linux bash 入口。",
+    "Linux 手机办公任务请使用豆包 App 适配包。",
     "不得模拟。",
     "不得生成样例报告或编造数据。",
     "失败必须返回真实失败原因、补证清单或可重试状态。"

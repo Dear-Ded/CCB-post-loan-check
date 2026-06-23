@@ -2,7 +2,7 @@
 
 Release `0.5.0`.
 
-WorkBuddy should present one simple form, one startup notice, and one clean execution flow. On Linux, use `packages/core-skill/workbuddy/run_workbuddy.sh`; on Windows, use `packages/core-skill/workbuddy/run_workbuddy.ps1`.
+WorkBuddy should present one simple form, one startup notice, and one clean execution flow. Only WorkBuddy desktop on Windows is a supported runtime for this project. Use `packages/core-skill/workbuddy/run_workbuddy.ps1`.
 
 ## Fields
 
@@ -23,10 +23,12 @@ WorkBuddy should present one simple form, one startup notice, and one clean exec
 
 The user should not need to understand PowerShell, Python, Node.js, browser profiles, or file paths.
 
-## Linux Run
+## Desktop Windows Run
 
-```bash
-bash packages/core-skill/workbuddy/run_workbuddy.sh --company "企业名" --mode enhanced --json
+```powershell
+.\packages\core-skill\workbuddy\run_workbuddy.ps1 -CompanyName "企业名" -Mode enhanced -Json
 ```
 
-WorkBuddy must execute the project runner as-is. It must not create simulated reports, sample screenshots, or invented source data.
+Do not expose a WorkBuddy mobile/Linux entrypoint. For mobile Linux office-task execution, use the Doubao App package.
+
+WorkBuddy must execute the project runner as-is. It must not create simulated reports, sample screenshots, invented source data, or fabricated failure reasons.

@@ -49,7 +49,7 @@ function Invoke-LocalPowerShellScript {
     [hashtable]$Parameters = @{}
   )
 
-  $scriptText = Get-Content -Raw -LiteralPath $ScriptPath
+  $scriptText = Get-Content -Raw -Encoding UTF8 -LiteralPath $ScriptPath
   $scriptBlock = [scriptblock]::Create($scriptText)
   & $scriptBlock @Parameters
 }
@@ -186,7 +186,7 @@ if ($RetryFailed) {
     $path = Join-Path $dir.FullName "batch-summary.json"
     if (-not (Test-Path -LiteralPath $path)) { continue }
     try {
-      $candidate = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+      $candidate = Get-Content -Raw -Encoding UTF8 -LiteralPath $path | ConvertFrom-Json
       if ($candidate) {
         $previousBatch = $dir.FullName
         $previous = $candidate

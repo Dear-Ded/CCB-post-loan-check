@@ -45,6 +45,6 @@ if ($RetryFailed) { $parameters.RetryFailed = $true }
 if ($NoPrompt) { $parameters.NoPrompt = $true }
 if ($TemplateSlots) { $parameters.TemplateSlots = $true }
 
-$scriptText = Get-Content -Raw -LiteralPath $runner
+$scriptText = Get-Content -Raw -Encoding UTF8 -LiteralPath $runner
 $scriptBlock = [scriptblock]::Create($scriptText)
 & $scriptBlock @parameters

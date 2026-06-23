@@ -48,6 +48,6 @@ if (-not [string]::IsNullOrWhiteSpace($JudicialMode)) { $parameters.JudicialMode
 if ($Headless) { $parameters.Headless = $true }
 if ($NoPrompt) { $parameters.NoPrompt = $true }
 
-$scriptText = Get-Content -Raw -LiteralPath $runner
+$scriptText = Get-Content -Raw -Encoding UTF8 -LiteralPath $runner
 $scriptBlock = [scriptblock]::Create($scriptText)
 & $scriptBlock @parameters

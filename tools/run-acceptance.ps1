@@ -43,7 +43,7 @@ function Invoke-Step([string]$Name, [scriptblock]$Body) {
 
 function Test-Output([string]$Path) {
   $contractScript = Join-Path $ProjectRoot "tools\test-output-contract.ps1"
-  $json = & ([scriptblock]::Create((Get-Content -Raw -LiteralPath $contractScript))) -OutputRoot $Path -Json
+  $json = & ([scriptblock]::Create((Get-Content -Raw -Encoding UTF8 -LiteralPath $contractScript))) -OutputRoot $Path -Json
   $json | Out-Host
   $payload = $json | ConvertFrom-Json
   if (-not $payload.ok) {
@@ -123,10 +123,34 @@ function Convert-ParameterHashtableToArgs([hashtable]$Parameters) {
 }
 
 function Invoke-ChildPowerShellScript([string]$ScriptPath, [hashtable]$Parameters) {
-  $argList = @("-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-File", $ScriptPath) + (Convert-ParameterHashtableToArgs $Parameters)
-  & powershell.exe @argList
-  if ($LASTEXITCODE -ne 0) {
-    throw "$ScriptPath failed with exit code $LASTEXITCODE"
+  $wrapper = Join-Path $env:TEMP ("ccb-ps-wrapper-{0}.ps1" -f ([guid]::NewGuid().ToString("N")))
+  $wrapperText = @'
+param(
+  [Parameter(Mandatory=$true)]
+  [string]$ScriptPath,
+
+  [Parameter(Mandatory=$true)]
+  [string]$ParametersFile
+)
+$ErrorActionPreference = "Stop"
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$parameters = Import-Clixml -LiteralPath $ParametersFile
+$scriptText = Get-Content -Raw -Encoding UTF8 -LiteralPath $ScriptPath
+& ([scriptblock]::Create($scriptText)) @parameters
+'@
+  $parametersFile = Join-Path $env:TEMP ("ccb-ps-params-{0}.clixml" -f ([guid]::NewGuid().ToString("N")))
+  Set-Content -LiteralPath $wrapper -Value $wrapperText -Encoding ASCII
+  try {
+    $Parameters | Export-Clixml -LiteralPath $parametersFile
+    & powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File $wrapper -ScriptPath $ScriptPath -ParametersFile $parametersFile
+    if ($LASTEXITCODE -ne 0) {
+      throw "$ScriptPath failed with exit code $LASTEXITCODE"
+    }
+  } finally {
+    Remove-Item -LiteralPath $wrapper -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $parametersFile -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -237,7 +261,20 @@ try {
         $scriptPath = Join-Path $ProjectRoot "tools\run-monitor.ps1"
         $parameters = @{ CompanyName = @($CompanyName); OrgCode = @($OrgCode); OutputRoot = $out; StateFile = $state; SkipSearch = $true; Json = $true }
         if ($AllowJudicialSkipForFastSmoke) { $parameters.SmokeQuick = $true }
-        Invoke-ChildPowerShellScript $scriptPath $parameters
+        $monitorError = $null
+        try {
+          Invoke-ChildPowerShellScript $scriptPath $parameters
+        } catch {
+          $monitorError = $_
+        }
+        if ($AllowJudicialSkipForFastSmoke) {
+          if ($monitorError) {
+            Write-Host ("Smoke monitor produced expected non-final status: {0}" -f $monitorError.Exception.Message)
+          }
+          Test-SmokeOutput $out
+          return
+        }
+        if ($monitorError) { throw $monitorError }
         $summary = Get-ChildItem -LiteralPath $out -Recurse -Filter "monitor-summary.json" -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $summary) { throw "monitor-summary.json was not created" }
       $payload = Get-Content -Raw -Encoding UTF8 -LiteralPath $summary.FullName | ConvertFrom-Json

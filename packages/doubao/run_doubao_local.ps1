@@ -53,7 +53,7 @@ function Invoke-LocalPowerShellScript {
     [hashtable]$Parameters = @{}
   )
 
-  $scriptText = Get-Content -Raw -LiteralPath $ScriptPath
+  $scriptText = Get-Content -Raw -Encoding UTF8 -LiteralPath $ScriptPath
   $scriptBlock = [scriptblock]::Create($scriptText)
   & $scriptBlock @Parameters
 }

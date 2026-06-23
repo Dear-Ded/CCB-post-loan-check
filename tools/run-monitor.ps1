@@ -10,6 +10,8 @@ param(
 
   [switch]$SkipSearch,
 
+  [switch]$SmokeQuick,
+
   [switch]$Json
 )
 
@@ -18,7 +20,11 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$ProjectRoot = if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+  (Get-Location).Path
+} else {
+  Split-Path -Parent $PSScriptRoot
+}
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
   $OutputRoot = Join-Path $env:TEMP ("ccb-monitor-" + [guid]::NewGuid().ToString("N"))
 }
@@ -108,13 +114,15 @@ if ($companies.Count -gt 1) {
   $runnerParameters = @{ CompanyName = @($companies); OutputRoot = $monitorRoot; NoPrompt = $true }
   if ($codes.Count) { $runnerParameters.OrgCode = @($codes) }
   if ($SkipSearch) { $runnerParameters.SkipSearch = $true }
-  & ([scriptblock]::Create((Get-Content -Raw -LiteralPath $runnerScript))) @runnerParameters
+  if ($SmokeQuick) { $runnerParameters.SmokeQuick = $true }
+  & ([scriptblock]::Create((Get-Content -Raw -Encoding UTF8 -LiteralPath $runnerScript))) @runnerParameters
 } else {
   $runnerScript = Join-Path $ProjectRoot "packages\core-skill\scripts\run_post_loan_check.ps1"
   $runnerParameters = @{ CompanyName = $companies[0]; OutputRoot = $monitorRoot; NoPrompt = $true }
   if ($codes.Count -gt 0) { $runnerParameters.OrgCode = $codes[0] }
   if ($SkipSearch) { $runnerParameters.SkipSearch = $true }
-  & ([scriptblock]::Create((Get-Content -Raw -LiteralPath $runnerScript))) @runnerParameters
+  if ($SmokeQuick) { $runnerParameters.SmokeQuick = $true }
+  & ([scriptblock]::Create((Get-Content -Raw -Encoding UTF8 -LiteralPath $runnerScript))) @runnerParameters
 }
 if ($LASTEXITCODE -ne 0) { throw "Monitor query run failed with exit code $LASTEXITCODE" }
 

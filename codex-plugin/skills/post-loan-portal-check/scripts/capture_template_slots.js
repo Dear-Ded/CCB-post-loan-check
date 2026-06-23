@@ -1155,17 +1155,35 @@ async function createBrowserContext({ chromium, chrome, profile, headless, requi
       const context = await chromium.launchPersistentContext(profile, launchOptions);
       return installAndReturn({ browser: null, context, persistent: true });
     } catch (error) {
-      if (!launchOptions.executablePath) throw error;
-      audit?.record("browser_context_local_launch_failed", {
+      const firstError = error;
+      audit?.record("browser_context_persistent_launch_failed", {
         executablePath: launchOptions.executablePath,
         persistence,
-        error: String(error.message || error)
+        profile,
+        error: String(firstError.message || firstError)
       });
-      const fallbackOptions = { ...launchOptions };
-      delete fallbackOptions.executablePath;
-      const context = await chromium.launchPersistentContext(profile, fallbackOptions);
-      audit?.record("browser_context_fallback_to_bundled", { persistence });
-      return installAndReturn({ browser: null, context, persistent: true });
+      if (launchOptions.executablePath) {
+        try {
+          const fallbackOptions = { ...launchOptions };
+          delete fallbackOptions.executablePath;
+          const context = await chromium.launchPersistentContext(profile, fallbackOptions);
+          audit?.record("browser_context_fallback_to_bundled", { persistence });
+          return installAndReturn({ browser: null, context, persistent: true });
+        } catch (bundledError) {
+          audit?.record("browser_context_bundled_persistent_launch_failed", {
+            persistence,
+            profile,
+            error: String(bundledError.message || bundledError)
+          });
+        }
+      }
+      const tempProfile = path.join(path.dirname(profile), `.temp-${process.pid}-${Date.now()}`);
+      fs.mkdirSync(tempProfile, { recursive: true });
+      const tempOptions = { ...launchOptions };
+      delete tempOptions.executablePath;
+      const context = await chromium.launchPersistentContext(tempProfile, tempOptions);
+      audit?.record("browser_context_fallback_to_temp_profile", { persistence, profile, tempProfile });
+      return installAndReturn({ browser: null, context, persistent: true, tempProfile });
     }
   }
 

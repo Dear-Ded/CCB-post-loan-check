@@ -18,7 +18,8 @@ const { buildRequiredEvidence, assertRequiredEvidence } = require("./framework/e
 const { JudicialRunScheduler } = require("./framework/judicial_run_scheduler");
 const {
   ENFORCEMENT_ROUTES,
-  JUDGMENT_ROUTES
+  JUDGMENT_ROUTES,
+  OFFICIAL_EXECUTION_NAVIGATION_ROUTES
 } = require("./framework/judicial_routes");
 const {
   attachEnforcementResponseAudit,
@@ -79,7 +80,7 @@ async function waitUntil(page, label, predicate, timeoutMs = 10 * 60 * 1000) {
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function withTimeout(label, timeoutMs, task) {
+async function withTimeout(label, timeoutMs, task, onTimeout = null) {
   let timer = null;
   const controller = new AbortController();
   try {
@@ -88,6 +89,9 @@ async function withTimeout(label, timeoutMs, task) {
       new Promise((_, reject) => {
         timer = setTimeout(() => {
           controller.abort();
+          if (typeof onTimeout === "function") {
+            Promise.resolve(onTimeout()).catch(() => {});
+          }
           reject(new Error(`${label} timed out after ${timeoutMs}ms`));
         }, timeoutMs);
       })
@@ -529,13 +533,36 @@ function isEnforcementResultState(text) {
   return /查询结果|未查询到|暂无数据|没有找到|无符合条件|没有符合条件|无相关信息|查询无结果|案号|执行法院|立案时间|执行标的/.test(text);
 }
 
+function isShixinRoute(routeId = "") {
+  return String(routeId).includes("shixin");
+}
+
+function isZhixingRoute(routeId = "") {
+  return String(routeId).includes("zhixing");
+}
+
+function inferEnforcementRouteId(page) {
+  const url = String(page?.url?.() || "");
+  if (url.includes("/shixin/")) return "shixin_query";
+  if (url.includes("/zhixing/")) return "zhixing_query";
+  if (url.includes("/zhzxgk/")) return "zhzxgk_query";
+  return "current_page";
+}
+
+function defaultEnforcementPrepAttempts(investigationMode) {
+  const configured = Number(process.env.POST_LOAN_ENFORCEMENT_PREP_ATTEMPTS);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  const modeAttempts = Number(investigationMode?.enforcementReadyAttempts || 3);
+  return Math.min(ENFORCEMENT_ROUTES.length, Math.max(3, modeAttempts));
+}
+
 async function navigateFromEnforcementHome(page, label, audit, routeId = "") {
   const readyNow = await page.locator("#pName").first().isVisible({ timeout: 1000 }).catch(() => false);
   const challengeNow = await page.locator("#yzm").first().isVisible({ timeout: 1000 }).catch(() => false);
   if (readyNow && challengeNow) return false;
-  const entrySelectors = routeId === "shixin_query"
+  const entrySelectors = isShixinRoute(routeId)
     ? ["a[href*='shixin/']", "a:has-text('失信被执行人')", "text=失信被执行人"]
-    : routeId === "zhixing_query"
+    : isZhixingRoute(routeId)
       ? ["a[href*='zhixing/']", "a:has-text('被执行人信息')", "text=被执行人信息"]
       : ["a[href*='zhzxgk/']", "a:has-text('执行综合查询')", "text=执行综合查询"];
   for (const selector of entrySelectors) {
@@ -555,11 +582,12 @@ async function navigateFromEnforcementHome(page, label, audit, routeId = "") {
     await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
     await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(2500);
+    page.__postLoanEnforcementRoute = inferEnforcementRouteId(page);
     return true;
   }
-  const direct = routeId === "shixin_query"
+  const direct = isShixinRoute(routeId)
     ? "https://zxgk.court.gov.cn/shixin/"
-    : routeId === "zhixing_query"
+    : isZhixingRoute(routeId)
       ? "https://zxgk.court.gov.cn/zhixing/"
       : "https://zxgk.court.gov.cn/zhzxgk/";
   if (page.url().startsWith("https://zxgk.court.gov.cn/")) {
@@ -572,6 +600,7 @@ async function navigateFromEnforcementHome(page, label, audit, routeId = "") {
     await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
     await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
     await page.waitForTimeout(2500);
+    page.__postLoanEnforcementRoute = inferEnforcementRouteId(page);
     return true;
   }
   return false;
@@ -603,7 +632,7 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
     const challengeReady = await page.locator("#yzm").first().isVisible({ timeout: 1500 }).catch(() => false);
     const bodyText = await pageText(page).catch(() => "");
     if (alreadyReady && challengeReady) {
-      page.__postLoanEnforcementRoute = page.__postLoanEnforcementRoute || "current_page";
+      page.__postLoanEnforcementRoute = page.__postLoanEnforcementRoute || inferEnforcementRouteId(page);
       return;
     }
     if (/被执行人姓名\/名称|身份证号码\/组织机构代码|验证码|全国法院信息综合查询|综合查询/.test(bodyText)) {
@@ -611,7 +640,7 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
       const pNameVisible = await page.locator("#pName").first().isVisible({ timeout: 3000 }).catch(() => false);
       const captchaVisible = await page.locator("#yzm").first().isVisible({ timeout: 3000 }).catch(() => false);
       if (pNameVisible && captchaVisible) {
-        page.__postLoanEnforcementRoute = page.__postLoanEnforcementRoute || "home_text_ready";
+        page.__postLoanEnforcementRoute = page.__postLoanEnforcementRoute || inferEnforcementRouteId(page);
         return;
       }
     }
@@ -815,15 +844,16 @@ async function fillAndSearchJudgments(page, company, audit, options = {}) {
 async function captureJudgmentPortal(page, shots, add, company, audit, scheduler, options = {}) {
   const attempts = Number(options.attempts || 3);
   const settleBaseMs = Number(options.settleBaseMs || 3000);
+  const routeTimeoutMs = Number(options.routeTimeoutMs || process.env.POST_LOAN_JUDGMENT_ROUTE_TIMEOUT_MS || 26000);
   const browserContext = page.context();
   let currentPage = page;
   return scheduler.runWithRetries("judicial_wenshu", attempts, async (attempt) => {
     writeStage(`judgment capture attempt ${attempt}`);
-    const file = add("中国裁判文书网");
     const route = JUDGMENT_ROUTES[(attempt - 1) % JUDGMENT_ROUTES.length];
-    audit?.record("judgment_route_selected", { company, attempt, route: route.id });
-    if (!currentPage || currentPage.isClosed()) currentPage = await browserContext.newPage();
-    try {
+    return withTimeout(`judgment route ${route.id}`, routeTimeoutMs, async () => {
+      const file = add("中国裁判文书网");
+      audit?.record("judgment_route_selected", { company, attempt, route: route.id, routeTimeoutMs });
+      if (!currentPage || currentPage.isClosed()) currentPage = await browserContext.newPage();
       if (route.id === "wenshu_home") {
         await goto(currentPage, route.url(company));
         await currentPage.locator("input.searchKey, #searchKey, input[placeholder*='输入案由'], input[placeholder*='关键词'], input[type='text']").first()
@@ -851,46 +881,81 @@ async function captureJudgmentPortal(page, shots, add, company, audit, scheduler
         throw new Error("China Judgments Online result page was not validated");
       }
       return judgmentShot;
-    } catch (error) {
-      await saveOfficialPageDiagnostic(currentPage, options.outDir, `wenshu-${route.id}-attempt-${attempt}-failed`, audit, {
+    }, async () => {
+      await currentPage?.close?.().catch(() => {});
+    }).catch(async (error) => {
+      const routeForDiag = route.id;
+      await saveOfficialPageDiagnostic(currentPage, options.outDir, `wenshu-${routeForDiag}-attempt-${attempt}-failed`, audit, {
         company,
-        route: route.id,
+        route: routeForDiag,
         attempt,
         error: String(error.message || error)
       }).catch(() => null);
-      if (/Target page|context or browser has been closed|frame was detached|ERR_ABORTED|page is closed|page was closed/i.test(String(error.message || error))) {
+      if (/Target page|context or browser has been closed|frame was detached|ERR_ABORTED|page is closed|page was closed|timed out/i.test(String(error.message || error))) {
         await currentPage.close().catch(() => {});
         currentPage = await browserContext.newPage();
       }
       throw error;
-    }
+    });
   }, { signal: options.signal, ignoreCooldown: Boolean(options.ignoreCooldown) });
 }
 
 async function warmOfficialJudicialOrigins(context, audit, options = {}) {
-  const urls = [
-    ...JUDGMENT_ROUTES.map((route) => route.url("")),
-    ...ENFORCEMENT_ROUTES.map((route) => route.url())
+  const routes = [
+    ...JUDGMENT_ROUTES.map((route) => ({ ...route, sourceType: "judgment", urlValue: route.url("") })),
+    ...ENFORCEMENT_ROUTES.map((route) => ({ ...route, sourceType: "enforcement", urlValue: route.url() })),
+    ...OFFICIAL_EXECUTION_NAVIGATION_ROUTES.map((route) => ({ ...route, sourceType: "official_navigation", urlValue: route.url() }))
   ];
   const timeoutMs = Number(options.timeoutMs || 15000);
   const page = await context.newPage();
   const results = [];
   try {
-    for (const url of urls) {
+    for (const route of routes) {
+      const url = route.urlValue;
       try {
         await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
         await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
         const text = await pageText(page).catch(() => "");
-        results.push({
+        const title = await page.title().catch(() => "");
+        const probe = {
+          url: page.url(),
+          title,
+          textSample: text.slice(0, 300),
+          hasNameField: await page.locator("#pName").first().isVisible({ timeout: 300 }).catch(() => false),
+          hasChallengeField: await page.locator("#yzm").first().isVisible({ timeout: 300 }).catch(() => false),
+          hasSearchButton: await page.locator("button,input[type='button'],input[type='submit'],a").first().isVisible({ timeout: 300 }).catch(() => false),
+          officialNavigationOnly: route.resultCapable === false
+        };
+        const category = route.resultCapable === false
+          ? "official_navigation_not_subject_result"
+          : classifyOfficialPageProbe(probe);
+        const result = {
+          route: route.id,
+          sourceType: route.sourceType,
           url,
           ok: true,
           finalUrl: page.url(),
-          title: await page.title().catch(() => ""),
-          hasEnforcementForm: await page.locator("#pName").first().isVisible({ timeout: 300 }).catch(() => false),
+          title,
+          category,
+          hasEnforcementForm: probe.hasNameField,
           textSample: text.slice(0, 120)
+        };
+        results.push(result);
+        audit?.record("official_route_preflight", {
+          ...result,
+          probe
         });
       } catch (error) {
-        results.push({ url, ok: false, error: String(error.message || error) });
+        const result = {
+          route: route.id,
+          sourceType: route.sourceType,
+          url,
+          ok: false,
+          category: "entry_or_page_unavailable",
+          error: String(error.message || error)
+        };
+        results.push(result);
+        audit?.record("official_route_preflight", result);
       }
       await page.waitForTimeout(500);
     }
@@ -902,8 +967,11 @@ async function warmOfficialJudicialOrigins(context, audit, options = {}) {
 }
 
 async function installOfficialPortalRequestCompatibility(context, audit) {
-  if (envFlag("POST_LOAN_DISABLE_OFFICIAL_HEADER_COMPAT", false)) {
-    audit?.record("official_portal_request_header_compat_disabled", { domain: "zxgk.court.gov.cn" });
+  if (!envFlag("POST_LOAN_ENABLE_OFFICIAL_HEADER_COMPAT", false)) {
+    audit?.record("official_portal_request_header_compat_disabled", {
+      domain: "zxgk.court.gov.cn",
+      reason: "disabled_by_default"
+    });
     return;
   }
   let logged = 0;
@@ -934,8 +1002,8 @@ async function getCaptchaSignature(page) {
   return `${state.imageSrc}|${state.imageComplete}|${state.imageSize}|${state.hidden}`;
 }
 
-async function prepareEnforcementChallenge(page, subjectName, codeOrId, audit) {
-  await waitForEnforcementReady(page, `China Enforcement ${subjectName}`, audit);
+async function prepareEnforcementChallenge(page, subjectName, codeOrId, audit, options = {}) {
+  await waitForEnforcementReady(page, `China Enforcement ${subjectName}`, audit, options);
   await fillAndVerifyEnforcementFields(page, subjectName, codeOrId);
   await page.locator("#yzm").click().catch(() => {});
   const diagnostic = await getEnforcementDiagnosticState(page);
@@ -946,10 +1014,10 @@ async function prepareEnforcementChallenge(page, subjectName, codeOrId, audit) {
   return diagnostic;
 }
 
-async function resetEnforcementCaptcha(page, subjectName, codeOrId, audit) {
+async function resetEnforcementCaptcha(page, subjectName, codeOrId, audit, options = {}) {
   console.log(`China Enforcement ${subjectName}: refreshing page challenge and restoring query fields.`);
   audit?.record("enforcement_captcha_reset_started", { subjectName });
-  await waitForEnforcementReady(page, `China Enforcement ${subjectName}`, audit);
+  await waitForEnforcementReady(page, `China Enforcement ${subjectName}`, audit, options);
   await fillAndVerifyEnforcementFields(page, subjectName, codeOrId);
   await page.locator("#yzm").fill("").catch(() => {});
   const beforeDiagnostic = await getEnforcementDiagnosticState(page);
@@ -965,7 +1033,7 @@ async function resetEnforcementCaptcha(page, subjectName, codeOrId, audit) {
   } else {
     await page.keyboard.press("Control+R").catch(() => {});
     await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
-    await waitForEnforcementReady(page, `China Enforcement ${subjectName}`, audit);
+    await waitForEnforcementReady(page, `China Enforcement ${subjectName}`, audit, options);
     await fillAndVerifyEnforcementFields(page, subjectName, codeOrId);
   }
   const afterState = await waitForCaptchaChange(page, beforeState, 8000, beforeDiagnostic.captchaDigest);
@@ -983,7 +1051,7 @@ async function resetEnforcementCaptcha(page, subjectName, codeOrId, audit) {
 async function runEnforcementAfterCaptcha(page, subjectName, codeOrId, audit, options = {}) {
   const mode = options.mode || "assisted";
   attachEnforcementResponseAudit(page, audit, subjectName);
-  let displayedCaptcha = await prepareEnforcementChallenge(page, subjectName, codeOrId, audit);
+  let displayedCaptcha = await prepareEnforcementChallenge(page, subjectName, codeOrId, audit, options);
   const maxAttempts = Number(options.confirmAttempts || process.env.POST_LOAN_ENFORCEMENT_CONFIRM_ATTEMPTS || 3);
   const resultWaitMs = Number(options.resultWaitMs || process.env.POST_LOAN_ENFORCEMENT_RESULT_WAIT_MS || 12000);
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -1053,7 +1121,7 @@ async function runEnforcementAfterCaptcha(page, subjectName, codeOrId, audit, op
       textSample: text.slice(0, 200),
       diagnostic: await getEnforcementDiagnosticState(page)
     });
-    displayedCaptcha = await resetEnforcementCaptcha(page, subjectName, codeOrId, audit);
+    displayedCaptcha = await resetEnforcementCaptcha(page, subjectName, codeOrId, audit, options);
   }
   throw new Error(`China Enforcement ${subjectName}: repeated page challenge/query attempts did not reach a result page.`);
 }
@@ -1260,7 +1328,7 @@ async function main() {
   const investigationMode = resolveInvestigationMode({ requestedMode: args.mode || args["investigation-mode"], audit });
   const runtimePolicy = loadRuntimePolicy({ skillRoot: path.join(__dirname, ".."), audit, investigationMode });
   audit.record("run_started", { company, subjectType, includeHealthCommission, smokeQuick, judicialMode, noPrompt, investigationMode: investigationMode.mode });
-  const skipNonEssentialSourceQueries = noPrompt && !envFlag("POST_LOAN_ENABLE_BACKGROUND_SOURCE_ENRICHMENT", false);
+  const skipNonEssentialSourceQueries = noPrompt || envFlag("POST_LOAN_DISABLE_BACKGROUND_SOURCE_ENRICHMENT", false);
   const chromeCandidates = [
     process.env.POST_LOAN_CHROME_EXE,
     "/usr/bin/google-chrome",
@@ -1368,10 +1436,15 @@ async function main() {
   const enforcementPage = smokeQuick ? null : await context.newPage();
   writeStage("browser pages prepared");
   if (!smokeQuick && investigationMode.judicialWarmup) {
-    await warmOfficialJudicialOrigins(context, audit, { timeoutMs: investigationMode.mode === "expert" ? 26000 : (investigationMode.mode === "deep" ? 22000 : 15000) }).catch((error) => {
-      audit.record("official_judicial_origins_warmup_failed", { error: String(error.message || error) });
-    });
-    writeStage("official judicial origins warmed");
+    if (noPrompt) {
+      audit.record("official_judicial_origins_warmup_skipped", { reason: "background_mode" });
+      writeStage("official judicial origins warmup skipped for background mode");
+    } else {
+      await warmOfficialJudicialOrigins(context, audit, { timeoutMs: investigationMode.mode === "expert" ? 26000 : (investigationMode.mode === "deep" ? 22000 : 15000) }).catch((error) => {
+        audit.record("official_judicial_origins_warmup_failed", { error: String(error.message || error) });
+      });
+      writeStage("official judicial origins warmed");
+    }
   }
   const shots = [];
   const add = makeAdd(outDir, shots);
@@ -1404,7 +1477,7 @@ async function main() {
     try {
       await withTimeout("enforcement preparation", Number(process.env.POST_LOAN_ENFORCEMENT_PREP_TIMEOUT_MS || 45000), async () => {
         await waitForEnforcementReady(enforcementPage, `China Enforcement ${company}`, audit, {
-          readyAttempts: Number(process.env.POST_LOAN_ENFORCEMENT_PREP_ATTEMPTS || Math.min(2, investigationMode.enforcementReadyAttempts || 2))
+          readyAttempts: defaultEnforcementPrepAttempts(investigationMode)
         });
       });
       writeStage("enforcement page prepared");
@@ -1423,7 +1496,7 @@ async function main() {
         `personal enforcement preparation ${person.name}`,
         Number(process.env.POST_LOAN_PERSON_ENFORCEMENT_PREP_TIMEOUT_MS || 30000),
         () => fillEnforcementQuery(personPage, person.name, person.idNumber, {
-          readyAttempts: Number(process.env.POST_LOAN_ENFORCEMENT_PREP_ATTEMPTS || Math.min(2, investigationMode.enforcementReadyAttempts || 2))
+          readyAttempts: defaultEnforcementPrepAttempts(investigationMode)
         })
       );
       personQueries.push({ person, page: personPage });
@@ -1439,6 +1512,13 @@ async function main() {
     console.log("Judicial sources are not enabled for this non-final run.");
   }
 
+  if (skipNonEssentialSourceQueries) {
+    writeStage("portal queue skipped for background run");
+    audit.record("portal_queue_skipped", {
+      company,
+      reason: "background_source_enrichment_disabled"
+    });
+  } else {
   const portalQueue = new TaskQueue({
     audit,
     concurrency: Number(args["portal-concurrency"] || process.env.POST_LOAN_PORTAL_CONCURRENCY || (noPrompt ? 3 : 2)),
@@ -1567,6 +1647,7 @@ async function main() {
     company,
     results: portalQueue.results || []
   });
+  }
 
   if (judicialEnabled) {
     writeStage("judicial capture started");

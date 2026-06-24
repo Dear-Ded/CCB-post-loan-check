@@ -15,36 +15,53 @@ const JUDGMENT_ROUTES = [
 
 const ENFORCEMENT_ROUTES = [
   {
-    id: "zxgk_https_home",
-    url: () => "https://zxgk.court.gov.cn/"
-  },
-  {
-    id: "zxgk_http_home",
-    url: () => "http://zxgk.court.gov.cn/"
-  },
-  {
-    id: "zhzxgk_http_query",
-    url: () => "http://zxgk.court.gov.cn/zhzxgk/"
-  },
-  {
-    id: "zhixing_http_query",
-    url: () => "http://zxgk.court.gov.cn/zhixing/"
-  },
-  {
-    id: "shixin_http_query",
-    url: () => "http://zxgk.court.gov.cn/shixin/"
-  },
-  {
     id: "zhzxgk_query",
+    kind: "enterprise_enforcement",
     url: () => "https://zxgk.court.gov.cn/zhzxgk/"
   },
   {
+    id: "shixin_query",
+    kind: "dishonest_enforcement",
+    url: () => "https://zxgk.court.gov.cn/shixin/"
+  },
+  {
+    id: "zxgk_https_home",
+    kind: "home",
+    url: () => "https://zxgk.court.gov.cn/"
+  },
+  {
     id: "zhixing_query",
+    kind: "personal_enforcement",
     url: () => "https://zxgk.court.gov.cn/zhixing/"
   },
   {
-    id: "shixin_query",
-    url: () => "https://zxgk.court.gov.cn/shixin/"
+    id: "zhzxgk_http_query",
+    kind: "enterprise_enforcement",
+    url: () => "http://zxgk.court.gov.cn/zhzxgk/"
+  },
+  {
+    id: "shixin_http_query",
+    kind: "dishonest_enforcement",
+    url: () => "http://zxgk.court.gov.cn/shixin/"
+  },
+  {
+    id: "zhixing_http_query",
+    kind: "personal_enforcement",
+    url: () => "http://zxgk.court.gov.cn/zhixing/"
+  },
+  {
+    id: "zxgk_http_home",
+    kind: "home",
+    url: () => "http://zxgk.court.gov.cn/"
+  }
+];
+
+const OFFICIAL_EXECUTION_NAVIGATION_ROUTES = [
+  {
+    id: "court_service_navigation_execution",
+    kind: "official_navigation",
+    resultCapable: false,
+    url: () => "https://cjdh.court.gov.cn/performInformation.html"
   }
 ];
 
@@ -62,6 +79,7 @@ function isAuthorizedEnforcementShot(shot, name = "") {
 module.exports = {
   ENFORCEMENT_ROUTES,
   JUDGMENT_ROUTES,
+  OFFICIAL_EXECUTION_NAVIGATION_ROUTES,
   isAuthorizedEnforcementShot,
   isAuthorizedJudgmentShot
 };

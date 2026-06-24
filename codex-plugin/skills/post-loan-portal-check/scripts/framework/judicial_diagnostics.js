@@ -27,6 +27,7 @@ function asArray(value) {
 function classifyMessage(message) {
   const text = String(message || "");
   if (/waf|WZWS|403 Forbidden|status\":?\s*403|status\":?\s*400|static resource|core resource/i.test(text)) return "waf_or_static_resource_blocked";
+  if (/aborted by capture budget|capture budget/i.test(text)) return "capture_budget_exhausted";
   if (/cooling down|cooldown/i.test(text)) return "source_cooldown";
   if (/login/i.test(text) || LOGIN_RE.test(text) || PLEASE_LOGIN_RE.test(text)) return "session_or_login_required";
   if (/failed to load|required subject and challenge fields|Target page|closed|timeout|Timed out/i.test(text) || LOAD_FAILED_RE.test(text)) return "entry_or_page_unavailable";
@@ -46,6 +47,10 @@ function classifyOfficialPageProbe(probe = {}) {
     .filter((status) => Number.isFinite(status));
   const hasBadOfficialResponse = statuses.some((status) => status === 400 || status === 403 || status >= 500);
   const textBlank = text.trim().length < 20 && title.trim().length === 0;
+
+  if (probe.officialNavigationOnly || /cjdh\.court\.gov\.cn\/performInformation/i.test(combined)) {
+    return "official_navigation_not_subject_result";
+  }
 
   if (probe.hasResultState || /查询结果|检索结果|搜索结果|暂无数据|未检索到|案号|执行法院|裁判日期/.test(combined)) {
     return "official_result_state";

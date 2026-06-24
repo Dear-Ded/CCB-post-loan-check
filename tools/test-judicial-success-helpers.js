@@ -4,7 +4,8 @@ const path = require("path");
 const { isCaptchaFailure, isResultState } = require("../packages/core-skill/scripts/framework/enforcement_source");
 const {
   ENFORCEMENT_ROUTES,
-  JUDGMENT_ROUTES
+  JUDGMENT_ROUTES,
+  OFFICIAL_EXECUTION_NAVIGATION_ROUTES
 } = require("../packages/core-skill/scripts/framework/judicial_routes");
 const { buildRequiredEvidence } = require("../packages/core-skill/scripts/framework/evidence_contract");
 
@@ -14,6 +15,10 @@ assert.ok(JUDGMENT_ROUTES.length >= 2, "judgment source should have multiple ent
 assert.ok(ENFORCEMENT_ROUTES.length >= 2, "enforcement source should have multiple entry routes");
 assert.ok(JUDGMENT_ROUTES.some((route) => route.url("濮阳测试有限公司").includes("wenshu.court.gov.cn")));
 assert.ok(ENFORCEMENT_ROUTES.some((route) => route.url().includes("zxgk.court.gov.cn")));
+assert.strictEqual(ENFORCEMENT_ROUTES[0].id, "zhzxgk_query", "enterprise enforcement route should remain first");
+assert.strictEqual(ENFORCEMENT_ROUTES[1].id, "shixin_query", "working official dishonest-enforcement form should be tried before home fallbacks");
+assert.ok(OFFICIAL_EXECUTION_NAVIGATION_ROUTES.some((route) => route.url().includes("cjdh.court.gov.cn")));
+assert.ok(OFFICIAL_EXECUTION_NAVIGATION_ROUTES.every((route) => route.resultCapable === false), "official navigation pages must not be accepted as subject result evidence");
 
 assert.strictEqual(isResultState("查询结果 未查询到相关信息"), true);
 assert.strictEqual(isResultState("案号 执行法院 立案时间 执行标的"), true);
@@ -43,6 +48,11 @@ assert.ok(!captureSource.includes("capturePublicJudicialSearch"), "formal judici
 assert.ok(!captureSource.includes("captureAuthorizedEvidence"), "formal judicial flow must not substitute authorized summary pages for official screenshots");
 assert.ok(!captureSource.includes("judgment_authorized_provider_used"), "formal judgment evidence must remain official portal evidence only");
 assert.ok(!captureSource.includes("enforcement_authorized_provider_used"), "formal enforcement evidence must remain official portal evidence only");
+assert.ok(captureSource.includes("function defaultEnforcementPrepAttempts"), "enforcement preparation should use route-aware attempt coverage");
+assert.ok(captureSource.includes("Math.max(3, modeAttempts)"), "enforcement preparation should cover zhzxgk, shixin, and home routes by default");
+assert.ok(captureSource.includes("function isShixinRoute"), "shixin route variants should share official form navigation handling");
+assert.ok(captureSource.includes("prepareEnforcementChallenge(page, subjectName, codeOrId, audit, options)"), "enforcement capture should preserve route attempts from investigation mode");
+assert.ok(captureSource.includes("resetEnforcementCaptcha(page, subjectName, codeOrId, audit, options)"), "enforcement challenge reset should preserve route attempts from investigation mode");
 assert.ok(!captureSource.includes("案由|案件名称|文书/.test(initialText)"), "judgment home page navigation must not be accepted as a result page");
 assert.ok(!captureSource.includes("案由|案件名称|文书/.test(compact)"), "judgment capture validation must not accept the home page only because it contains navigation labels");
 assert.ok(!captureSource.includes("裁判日期|案由|案件名称"), "judgment placeholder text must not be accepted as a result page");

@@ -11,6 +11,7 @@ assert.strictEqual(classifyMessage("login required"), "session_or_login_required
 assert.strictEqual(classifyMessage("failed to load required subject and challenge fields"), "entry_or_page_unavailable");
 assert.strictEqual(classifyMessage("no authorized judicial provider evidence was available"), "authorized_provider_missing");
 assert.strictEqual(classifyMessage("403 Forbidden WZWS-RAY waf"), "waf_or_static_resource_blocked");
+assert.strictEqual(classifyMessage("judicial_wenshu aborted by capture budget"), "capture_budget_exhausted");
 
 assert.strictEqual(classifyOfficialPageProbe({
   url: "https://zxgk.court.gov.cn/zhzxgk/",
@@ -33,6 +34,12 @@ assert.strictEqual(classifyOfficialPageProbe({
   hasResultState: true,
   textSample: "查询结果 未查询到相关信息"
 }), "official_result_state");
+assert.strictEqual(classifyOfficialPageProbe({
+  url: "https://cjdh.court.gov.cn/performInformation.html",
+  title: "最高人民法院服务人民群众系统场景导航",
+  officialNavigationOnly: true,
+  textSample: "失信被执行人 限制消费人员 更多>> 执行公告"
+}), "official_navigation_not_subject_result");
 
 const categories = classifyEvents([
   { type: "judgment_portal_capture_failed", error: "result page was not validated" },

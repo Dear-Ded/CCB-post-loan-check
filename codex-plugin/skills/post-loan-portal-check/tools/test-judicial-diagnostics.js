@@ -10,6 +10,7 @@ const {
 assert.strictEqual(classifyMessage("China Enforcement did not reach a confirmed result page"), "result_state_unconfirmed");
 assert.strictEqual(classifyMessage("captcha changed before submit"), "page_challenge_unresolved");
 assert.strictEqual(classifyMessage("login required"), "session_or_login_required");
+assert.strictEqual(classifyMessage("China Judgments Online wenshu_search requires an authorized session"), "session_or_login_required");
 assert.strictEqual(classifyMessage("failed to load required subject and challenge fields"), "entry_or_page_unavailable");
 assert.strictEqual(classifyMessage("no authorized judicial provider evidence was available"), "authorized_provider_missing");
 assert.strictEqual(classifyMessage("403 Forbidden WZWS-RAY waf"), "waf_or_static_resource_blocked");

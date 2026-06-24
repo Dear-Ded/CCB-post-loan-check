@@ -775,6 +775,7 @@ async function waitForJudgmentResultPage(page, company, beforeUrl, timeoutMs = 3
 
 async function fillAndSearchJudgments(page, company, audit, options = {}) {
   const resultWaitMs = Number(options.resultWaitMs || process.env.POST_LOAN_JUDGMENT_RESULT_WAIT_MS || 12000);
+  const inputWaitMs = Number(options.searchInputWaitMs || process.env.POST_LOAN_JUDGMENT_INPUT_WAIT_MS || 5000);
   const initialText = await pageText(page);
   if (page.url().includes("wenshu.court.gov.cn") && (initialText.includes(company) || hasJudgmentResultState(initialText))) {
     return;
@@ -784,7 +785,7 @@ async function fillAndSearchJudgments(page, company, audit, options = {}) {
   }
   const beforeUrl = page.url();
   const searchInput = judgmentSearchInput(page);
-  await searchInput.waitFor({ state: "visible", timeout: 15000 });
+  await searchInput.waitFor({ state: "visible", timeout: inputWaitMs });
   await searchInput.click({ clickCount: 3 }).catch(() => {});
   await searchInput.fill("").catch(() => {});
   await searchInput.type(company, { delay: 35 }).catch(async () => {
@@ -857,18 +858,27 @@ async function captureJudgmentPortal(page, shots, add, company, audit, scheduler
       if (route.id === "wenshu_home") {
         await goto(currentPage, route.url(company));
         await currentPage.locator("input.searchKey, #searchKey, input[placeholder*='输入案由'], input[placeholder*='关键词'], input[type='text']").first()
-          .waitFor({ state: "visible", timeout: 12000 })
+          .waitFor({ state: "visible", timeout: Number(process.env.POST_LOAN_JUDGMENT_HOME_INPUT_WAIT_MS || 5000) })
           .catch(() => {});
       } else {
         await gotoWithRetries(currentPage, route.url(company), `China Judgments Online ${company} ${route.id}`, 2);
       }
       writeStage(`judgment route loaded ${route.id}`);
       const beforeSearchText = await pageText(currentPage);
-      if (!await isJudgmentLoginPage(currentPage, beforeSearchText)) {
-        await fillAndSearchJudgments(currentPage, company, audit, {
-          resultWaitMs: Number(options.resultWaitMs || process.env.POST_LOAN_JUDGMENT_RESULT_WAIT_MS || 12000)
+      if (await isJudgmentLoginPage(currentPage, beforeSearchText)) {
+        audit?.record("judgment_route_requires_authorized_session", {
+          company,
+          attempt,
+          route: route.id,
+          url: currentPage.url(),
+          title: await currentPage.title().catch(() => "")
         });
+        throw new Error(`China Judgments Online ${route.id} requires an authorized session`);
       }
+      await fillAndSearchJudgments(currentPage, company, audit, {
+        resultWaitMs: Number(options.resultWaitMs || process.env.POST_LOAN_JUDGMENT_RESULT_WAIT_MS || 12000),
+        searchInputWaitMs: Number(process.env.POST_LOAN_JUDGMENT_INPUT_WAIT_MS || 5000)
+      });
       await currentPage.waitForTimeout(settleBaseMs + attempt * 1000);
       const judgmentShot = await capture(currentPage, shots, "中国裁判文书网", file, 0, { company, audit });
       if (!judgmentShot) {
@@ -901,9 +911,10 @@ async function captureJudgmentPortal(page, shots, add, company, audit, scheduler
 }
 
 async function warmOfficialJudicialOrigins(context, audit, options = {}) {
+  const includeEnforcement = options.includeEnforcement !== false;
   const routes = [
     ...JUDGMENT_ROUTES.map((route) => ({ ...route, sourceType: "judgment", urlValue: route.url("") })),
-    ...ENFORCEMENT_ROUTES.map((route) => ({ ...route, sourceType: "enforcement", urlValue: route.url() })),
+    ...(includeEnforcement ? ENFORCEMENT_ROUTES.map((route) => ({ ...route, sourceType: "enforcement", urlValue: route.url() })) : []),
     ...OFFICIAL_EXECUTION_NAVIGATION_ROUTES.map((route) => ({ ...route, sourceType: "official_navigation", urlValue: route.url() }))
   ];
   const timeoutMs = Number(options.timeoutMs || 15000);
@@ -1191,13 +1202,13 @@ function assertRequiredJudicialEvidence(shots, { smokeQuick, judicialEnabled, pe
 }
 
 async function createBrowserContext({ chromium, chrome, profile, headless, requiresForeground, runtimePolicy, audit, preferPersistentProfile = false }) {
-  const defaultBrowserEngine = preferPersistentProfile && chrome
+  const defaultBrowserEngine = envFlag("POST_LOAN_PREFER_LOCAL_BROWSER", false) && chrome
     ? "local"
-    : ((headless && !requiresForeground) ? "playwright" : "local");
+    : "playwright";
   const browserEngine = envChoice("POST_LOAN_BROWSER_ENGINE", defaultBrowserEngine);
   const persistence = envChoice(
     "POST_LOAN_BROWSER_PERSISTENCE",
-    ((headless && !requiresForeground) && !preferPersistentProfile) ? "ephemeral" : "persistent"
+    preferPersistentProfile ? "persistent" : "ephemeral"
   );
   const useBundledChromium = browserEngine === "playwright" || envFlag("POST_LOAN_USE_BUNDLED_CHROMIUM", false);
   const usePersistentProfile = persistence !== "ephemeral" && !envFlag("POST_LOAN_DISABLE_PERSISTENT_PROFILE", false);
@@ -1252,6 +1263,20 @@ async function createBrowserContext({ chromium, chrome, profile, headless, requi
             error: String(bundledError.message || bundledError)
           });
         }
+      } else if (chrome) {
+        try {
+          const localFallbackOptions = { ...launchOptions, executablePath: chrome };
+          const context = await chromium.launchPersistentContext(profile, localFallbackOptions);
+          audit?.record("browser_context_fallback_to_local", { persistence, executablePath: chrome });
+          return installAndReturn({ browser: null, context, persistent: true });
+        } catch (localError) {
+          audit?.record("browser_context_local_persistent_launch_failed", {
+            persistence,
+            profile,
+            executablePath: chrome,
+            error: String(localError.message || localError)
+          });
+        }
       }
       const tempProfile = path.join(path.dirname(profile), `.temp-${process.pid}-${Date.now()}`);
       fs.mkdirSync(tempProfile, { recursive: true });
@@ -1271,7 +1296,19 @@ async function createBrowserContext({ chromium, chrome, profile, headless, requi
       ...(launchOptions.executablePath ? { executablePath: launchOptions.executablePath } : {})
     });
   } catch (error) {
-    if (!launchOptions.executablePath) throw error;
+    if (!launchOptions.executablePath) {
+      if (!chrome) throw error;
+      audit?.record("browser_context_bundled_launch_failed", {
+        persistence,
+        error: String(error.message || error)
+      });
+      browser = await chromium.launch({
+        headless: launchOptions.headless,
+        args: launchOptions.args,
+        executablePath: chrome
+      });
+      audit?.record("browser_context_fallback_to_local", { persistence, executablePath: chrome });
+    } else {
     audit?.record("browser_context_local_launch_failed", {
       executablePath: launchOptions.executablePath,
       persistence,
@@ -1282,6 +1319,7 @@ async function createBrowserContext({ chromium, chrome, profile, headless, requi
       args: launchOptions.args
     });
     audit?.record("browser_context_fallback_to_bundled", { persistence });
+    }
   }
   const context = await browser.newContext({
     viewport: launchOptions.viewport,
@@ -1361,7 +1399,7 @@ async function main() {
   const profileScope = smokeQuick ? "government" : "judicial";
   const persistentProfile = sessionManager.profilePath(profileScope);
   const previousSession = sessionManager.readState(profileScope);
-  const useRunProfile = smokeQuick || envFlag("POST_LOAN_FORCE_CLEAN_PROFILE", noPrompt && !previousSession);
+  const useRunProfile = smokeQuick || !previousSession || envFlag("POST_LOAN_FORCE_CLEAN_PROFILE", noPrompt && !previousSession);
   const profile = useRunProfile
     ? path.join(persistentProfile, `run-${Date.now()}-${process.pid}`)
     : persistentProfile;
@@ -1369,7 +1407,7 @@ async function main() {
   audit.record("browser_profile_policy", {
     scope: profileScope,
     useRunProfile,
-    reason: useRunProfile ? (smokeQuick ? "smoke_quick" : "background_without_valid_session") : "persistent_session_available"
+    reason: useRunProfile ? (smokeQuick ? "smoke_quick" : "no_valid_persistent_session") : "persistent_session_available"
   });
   const sourceStateStore = new SourceStateStore({ file: path.join(persistentProfile, "source-state.json"), audit });
   const judicialScheduler = new JudicialRunScheduler({
@@ -1427,7 +1465,7 @@ async function main() {
     requiresForeground,
     runtimePolicy,
     audit,
-    preferPersistentProfile: investigationMode.mode === "expert" || investigationMode.mode === "deep"
+    preferPersistentProfile: Boolean(previousSession) && !useRunProfile && (investigationMode.mode === "expert" || investigationMode.mode === "deep" || investigationMode.sessionReuse)
   });
   const { context, browser } = browserSession;
   writeStage("browser context launched");
@@ -1440,7 +1478,10 @@ async function main() {
       audit.record("official_judicial_origins_warmup_skipped", { reason: "background_mode" });
       writeStage("official judicial origins warmup skipped for background mode");
     } else {
-      await warmOfficialJudicialOrigins(context, audit, { timeoutMs: investigationMode.mode === "expert" ? 26000 : (investigationMode.mode === "deep" ? 22000 : 15000) }).catch((error) => {
+      await warmOfficialJudicialOrigins(context, audit, {
+        timeoutMs: investigationMode.mode === "expert" ? 26000 : (investigationMode.mode === "deep" ? 22000 : 15000),
+        includeEnforcement: false
+      }).catch((error) => {
         audit.record("official_judicial_origins_warmup_failed", { error: String(error.message || error) });
       });
       writeStage("official judicial origins warmed");
@@ -1651,6 +1692,54 @@ async function main() {
 
   if (judicialEnabled) {
     writeStage("judicial capture started");
+    let validatedEnforcementPage = null;
+    try {
+      console.log("Starting China Enforcement Information required query.");
+      const enterpriseEnforcementPage = enforcementPage && !enforcementPage.isClosed() ? enforcementPage : await context.newPage();
+      validatedEnforcementPage = await withTimeout(
+        "enterprise enforcement capture",
+        Number(process.env.POST_LOAN_ENFORCEMENT_CAPTURE_TIMEOUT_MS || (investigationMode.mode === "expert" ? 90000 : 65000)),
+        (signal) => judicialScheduler.runWithRetries("judicial_zhixing_enterprise", 2, async () => (
+          completeEnforcementQuery(context, enterpriseEnforcementPage, company, orgCode, audit, {
+            mode: judicialMode,
+            noPrompt,
+            challengeEngine,
+            readyAttempts: investigationMode.enforcementReadyAttempts,
+            confirmAttempts: investigationMode.enforcementConfirmAttempts,
+            recoveries: investigationMode.enforcementRecoveries,
+            resultWaitMs: investigationMode.enforcementResultWaitMs,
+            outDir
+          })
+        ), { ignoreCooldown: true, signal })
+      );
+      file = add("中国执行信息公开网");
+      await capture(validatedEnforcementPage, shots, "中国执行信息公开网", file, 0, { enforcementValidated: Boolean(validatedEnforcementPage.__postLoanEnforcementValidated) });
+      for (const query of personQueries) {
+        console.log(`Waiting for personal enforcement result confirmation for ${query.person.name}.`);
+        query.page = await judicialScheduler.runWithRetries(`judicial_zhixing_person_${safePart(query.person.name)}`, 2, async () => (
+          completeEnforcementQuery(context, query.page, query.person.name, query.person.idNumber, audit, {
+            mode: judicialMode,
+            noPrompt,
+            challengeEngine,
+            readyAttempts: investigationMode.enforcementReadyAttempts,
+            confirmAttempts: investigationMode.enforcementConfirmAttempts,
+            recoveries: investigationMode.enforcementRecoveries,
+            resultWaitMs: investigationMode.enforcementResultWaitMs,
+            outDir
+          })
+        ), { ignoreCooldown: true });
+      }
+    } catch (error) {
+      console.log(`China Enforcement Information did not reach a confirmed result page: ${error && error.message ? error.message : error}`);
+      audit.record("enforcement_portal_capture_failed", { company, error: String(error.message || error) });
+      for (const officialPage of context.pages()) {
+        await saveOfficialPageDiagnostic(officialPage, outDir, "zxgk-capture-failed", audit, {
+          company,
+          error: String(error.message || error)
+        }).catch(() => null);
+      }
+    }
+
     let judgmentCaptured = false;
     let judgmentPage = null;
 
@@ -1687,59 +1776,8 @@ async function main() {
       });
     }
 
-    let validatedEnforcementPage = null;
-    try {
-      console.log("Starting China Enforcement Information required query.");
-      const enterpriseEnforcementPage = await context.newPage();
-      validatedEnforcementPage = await withTimeout(
-        "enterprise enforcement capture",
-        Number(process.env.POST_LOAN_ENFORCEMENT_CAPTURE_TIMEOUT_MS || (investigationMode.mode === "expert" ? 90000 : 65000)),
-        (signal) => judicialScheduler.runWithRetries("judicial_zhixing_enterprise", 2, async () => (
-          completeEnforcementQuery(context, enterpriseEnforcementPage, company, orgCode, audit, {
-            mode: judicialMode,
-            noPrompt,
-            challengeEngine,
-            readyAttempts: investigationMode.enforcementReadyAttempts,
-            confirmAttempts: investigationMode.enforcementConfirmAttempts,
-            recoveries: investigationMode.enforcementRecoveries,
-            resultWaitMs: investigationMode.enforcementResultWaitMs,
-            outDir
-          })
-        ), { ignoreCooldown: true, signal })
-      );
-      for (const query of personQueries) {
-        console.log(`Waiting for personal enforcement result confirmation for ${query.person.name}.`);
-        query.page = await judicialScheduler.runWithRetries(`judicial_zhixing_person_${safePart(query.person.name)}`, 2, async () => (
-          completeEnforcementQuery(context, query.page, query.person.name, query.person.idNumber, audit, {
-            mode: judicialMode,
-            noPrompt,
-            challengeEngine,
-            readyAttempts: investigationMode.enforcementReadyAttempts,
-            confirmAttempts: investigationMode.enforcementConfirmAttempts,
-            recoveries: investigationMode.enforcementRecoveries,
-            resultWaitMs: investigationMode.enforcementResultWaitMs,
-            outDir
-          })
-        ), { ignoreCooldown: true });
-      }
-    } catch (error) {
-      console.log(`China Enforcement Information did not reach a confirmed result page: ${error && error.message ? error.message : error}`);
-      audit.record("enforcement_portal_capture_failed", { company, error: String(error.message || error) });
-      for (const officialPage of context.pages()) {
-        await saveOfficialPageDiagnostic(officialPage, outDir, "zxgk-capture-failed", audit, {
-          company,
-          error: String(error.message || error)
-        }).catch(() => null);
-      }
-    }
-
     if (!validatedEnforcementPage) {
         throw new Error("China Enforcement Information did not reach a confirmed official result page; refusing to build final report.");
-    }
-
-    file = add("中国执行信息公开网");
-    if (validatedEnforcementPage) {
-      await capture(validatedEnforcementPage, shots, "中国执行信息公开网", file, 0, { enforcementValidated: Boolean(validatedEnforcementPage.__postLoanEnforcementValidated) });
     }
   }
 

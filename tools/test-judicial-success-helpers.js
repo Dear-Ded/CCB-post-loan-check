@@ -53,6 +53,12 @@ assert.ok(captureSource.includes("Math.max(3, modeAttempts)"), "enforcement prep
 assert.ok(captureSource.includes("function isShixinRoute"), "shixin route variants should share official form navigation handling");
 assert.ok(captureSource.includes("prepareEnforcementChallenge(page, subjectName, codeOrId, audit, options)"), "enforcement capture should preserve route attempts from investigation mode");
 assert.ok(captureSource.includes("resetEnforcementCaptcha(page, subjectName, codeOrId, audit, options)"), "enforcement challenge reset should preserve route attempts from investigation mode");
+assert.ok(captureSource.includes('preferPersistentProfile ? "persistent" : "ephemeral"'), "browser context should default to ephemeral unless a valid session is being reused");
+assert.ok(captureSource.includes("preferPersistentProfile: Boolean(previousSession)"), "persistent browser profile should require a previous session");
+assert.ok(captureSource.includes("no_valid_persistent_session"), "runs without a previous session should use an isolated run profile");
+assert.ok(captureSource.includes("POST_LOAN_JUDGMENT_INPUT_WAIT_MS"), "judgment search input wait must be configurable");
+assert.ok(captureSource.includes("POST_LOAN_JUDGMENT_HOME_INPUT_WAIT_MS"), "judgment home input wait must be configurable");
+assert.ok(captureSource.includes("includeEnforcement: false"), "formal warmup should not pre-scan enforcement routes before the required query");
 assert.ok(!captureSource.includes("案由|案件名称|文书/.test(initialText)"), "judgment home page navigation must not be accepted as a result page");
 assert.ok(!captureSource.includes("案由|案件名称|文书/.test(compact)"), "judgment capture validation must not accept the home page only because it contains navigation labels");
 assert.ok(!captureSource.includes("裁判日期|案由|案件名称"), "judgment placeholder text must not be accepted as a result page");

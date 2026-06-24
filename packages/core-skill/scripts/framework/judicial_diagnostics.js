@@ -29,7 +29,7 @@ function classifyMessage(message) {
   if (/waf|WZWS|403 Forbidden|status\":?\s*403|status\":?\s*400|static resource|core resource/i.test(text)) return "waf_or_static_resource_blocked";
   if (/aborted by capture budget|capture budget/i.test(text)) return "capture_budget_exhausted";
   if (/cooling down|cooldown/i.test(text)) return "source_cooldown";
-  if (/login/i.test(text) || LOGIN_RE.test(text) || PLEASE_LOGIN_RE.test(text)) return "session_or_login_required";
+  if (/login|authorized session/i.test(text) || LOGIN_RE.test(text) || PLEASE_LOGIN_RE.test(text)) return "session_or_login_required";
   if (/failed to load|required subject and challenge fields|Target page|closed|timeout|Timed out/i.test(text) || LOAD_FAILED_RE.test(text)) return "entry_or_page_unavailable";
   if (/result page was not validated|result_not_confirmed|not reach a result|did not reach a confirmed result/i.test(text) || NOT_CONFIRMED_RE.test(text) || STILL_NOT_CONFIRMED_RE.test(text)) return "result_state_unconfirmed";
   if (/captcha|challenge/i.test(text) || CODE_RE.test(text) || CHECK_CODE_RE.test(text) || CONFIRM_ITEM_RE.test(text)) return "page_challenge_unresolved";

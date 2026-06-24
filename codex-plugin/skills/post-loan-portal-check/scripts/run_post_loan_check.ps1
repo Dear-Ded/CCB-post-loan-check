@@ -204,6 +204,28 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase) {
   $modeInfo = Get-EffectiveModeInfo -RunDirectory $runDir
   $effectiveMode = $modeInfo.mode
   $settingsMode = $modeInfo.settingsMode
+  $missingEvidence = @()
+  if ($Phase -like "*portal_capture*" -and -not $SmokeQuick) {
+    $missingEvidence = @(
+      [pscustomobject]@{ id = "judicial_wenshu"; label = "China Judgments Online"; reason = "official_judgment_result_not_confirmed_before_manifest" },
+      [pscustomobject]@{ id = "judicial_enforcement"; label = "China Enforcement Information"; reason = "official_enforcement_result_not_confirmed_before_manifest" }
+    )
+  }
+  $evidenceSummary = if ($missingEvidence.Count -gt 0) {
+    @($missingEvidence | ForEach-Object { "$($_.id):$($_.reason)" }) -join ", "
+  } else {
+    ""
+  }
+  $effectiveReason = if (-not [string]::IsNullOrWhiteSpace($evidenceSummary)) {
+    "Required official evidence was not confirmed: $evidenceSummary"
+  } else {
+    $Reason
+  }
+  $nextAction = if (-not [string]::IsNullOrWhiteSpace($evidenceSummary)) {
+    "Required evidence is still missing: $evidenceSummary. Re-run the official source capture for those items, then rebuild the report."
+  } else {
+    "Inspect stage-log.txt and audit-events.json. Required judicial/execution evidence was not confirmed, so the formal report was not generated."
+  }
   $screenshots = @(Get-ChildItem -LiteralPath $runDir -Filter "*.png" -ErrorAction SilentlyContinue |
     Sort-Object Name |
     ForEach-Object {
@@ -234,10 +256,11 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase) {
     settingsMode = $settingsMode
     judicialMode = $JudicialMode
     phase = $Phase
-    reason = $Reason
+    reason = $effectiveReason
     runDir = $runDir
     generatedAt = (Get-Date).ToString("o")
     screenshots = $screenshots
+    missingEvidence = $missingEvidence
     judicialDiagnostics = if ($judicialDiagnostics) { $judicialDiagnostics } else { [ordered]@{
       ok = $false
       categories = @([ordered]@{
@@ -246,7 +269,7 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase) {
         samples = @([ordered]@{ type = "timeout"; reason = $Reason })
       })
     }}
-    nextAction = "Inspect stage-log.txt and audit-events.json. Required judicial/execution evidence was not confirmed, so the formal report was not generated."
+    nextAction = $nextAction
   }
   $jsonPath = Join-Path $runDir "failure-summary.json"
   $mdPath = Join-Path $runDir "failure-summary.md"
@@ -257,10 +280,16 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase) {
     "- Company: $CompanyName",
     "- Mode: $effectiveMode",
     "- Phase: $Phase",
-    "- Reason: $Reason",
+    "- Reason: $effectiveReason",
     "- Real screenshots captured: $($screenshots.Count)",
     "- Formal report: not generated"
-  ) | Set-Content -LiteralPath $mdPath -Encoding UTF8
+  )
+  if ($missingEvidence.Count -gt 0) {
+    $md += ""
+    $md += "## Missing Evidence"
+    $md += @($missingEvidence | ForEach-Object { "- $($_.id): $($_.reason)" })
+  }
+  $md | Set-Content -LiteralPath $mdPath -Encoding UTF8
   Write-Stage "minimal failure summary written: $jsonPath"
 }
 

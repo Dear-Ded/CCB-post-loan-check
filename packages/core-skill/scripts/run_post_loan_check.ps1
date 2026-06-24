@@ -235,6 +235,13 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase, [string]$M
   $effectiveMode = $modeInfo.mode
   $settingsMode = $modeInfo.settingsMode
   $missingEvidence = @(Get-RequiredEvidenceSummary -ManifestPath $ManifestPath)
+  $manifestExists = -not [string]::IsNullOrWhiteSpace($ManifestPath) -and (Test-Path -LiteralPath $ManifestPath)
+  if ($missingEvidence.Count -eq 0 -and -not $manifestExists -and $Phase -like "*portal_capture*" -and -not $SmokeQuick) {
+    $missingEvidence = @(
+      [pscustomobject]@{ id = "judicial_wenshu"; label = "China Judgments Online"; reason = "official_judgment_result_not_confirmed_before_manifest" },
+      [pscustomobject]@{ id = "judicial_enforcement"; label = "China Enforcement Information"; reason = "official_enforcement_result_not_confirmed_before_manifest" }
+    )
+  }
   $evidenceSummary = Format-RequiredEvidenceSummary -MissingEvidence $missingEvidence
   $effectiveReason = $Reason
   if ($Phase -eq "report_build" -and -not [string]::IsNullOrWhiteSpace($evidenceSummary)) {

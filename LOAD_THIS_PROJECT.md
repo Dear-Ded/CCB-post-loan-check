@@ -60,6 +60,7 @@ bash packages/doubao/preflight_doubao_app.sh
 - 批量：`batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/reports`
 - 证据：`batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/evidence`
 - 验收：`tools/test-output-contract.ps1`
+- 官方源预检：`npm run diagnose:official -- --company "企业名称"`
 
 ## 搜索关键词
 

@@ -52,7 +52,7 @@ function classifyOfficialPageProbe(probe = {}) {
     return "official_navigation_not_subject_result";
   }
 
-  if (probe.hasResultState || /查询结果|检索结果|搜索结果|暂无数据|未检索到|案号|执行法院|裁判日期/.test(combined)) {
+  if (probe.hasResultState || /查询结果|检索结果|搜索结果|暂无数据|未检索到|案号|裁判日期|立案时间|执行标的/.test(combined)) {
     return "official_result_state";
   }
   if (probe.hasNameField && (probe.hasChallengeField || probe.hasSearchButton)) {
@@ -117,6 +117,48 @@ function classifyEvents(events) {
   })).sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
 }
 
+function readinessFromCategory(sourceType, category) {
+  if (sourceType === "official_navigation" || category === "official_navigation_not_subject_result") return "navigation_only";
+  if (category === "official_form_ready" || category === "official_result_state") return "ready";
+  if (category === "session_or_login_required") return "needs_authorized_session";
+  if (category === "page_challenge_unresolved") return "needs_managed_confirmation";
+  if (category === "partial_form_loaded") return "partial";
+  return "unavailable";
+}
+
+function summarizeOfficialReadiness(events) {
+  const summary = {};
+  for (const event of events) {
+    if (String(event.type || "") !== "official_route_preflight") continue;
+    const sourceType = String(event.sourceType || "unknown");
+    const category = event.category || classifyOfficialPageProbe(event.probe || event);
+    const readiness = readinessFromCategory(sourceType, category);
+    if (!summary[sourceType]) {
+      summary[sourceType] = {
+        readyRoutes: 0,
+        resultCapableRoutes: 0,
+        categories: {},
+        routes: []
+      };
+    }
+    const resultCapable = sourceType !== "official_navigation" && event.resultCapable !== false;
+    const bucket = summary[sourceType];
+    if (resultCapable) bucket.resultCapableRoutes += 1;
+    if (readiness === "ready") bucket.readyRoutes += 1;
+    bucket.categories[category] = (bucket.categories[category] || 0) + 1;
+    bucket.routes.push({
+      route: event.route || "",
+      url: event.url || "",
+      finalUrl: event.finalUrl || "",
+      title: event.title || "",
+      category,
+      readiness,
+      resultCapable
+    });
+  }
+  return summary;
+}
+
 function missingJudicialEvidence(manifest) {
   const missing = asArray(manifest?.requiredEvidence?.missingRequired);
   return missing
@@ -179,6 +221,7 @@ function summarizeJudicialDiagnostics({ runDir, manifestPath } = {}) {
     ok: manifestExists && missing.length === 0,
     providerUsed,
     missing,
+    officialReadiness: summarizeOfficialReadiness(events),
     categories
   };
 }
@@ -187,5 +230,7 @@ module.exports = {
   classifyEvents,
   classifyOfficialPageProbe,
   classifyMessage,
+  readinessFromCategory,
+  summarizeOfficialReadiness,
   summarizeJudicialDiagnostics
 };

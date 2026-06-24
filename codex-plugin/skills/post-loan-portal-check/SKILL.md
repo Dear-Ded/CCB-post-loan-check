@@ -59,6 +59,14 @@ Optional hospital/medical portal:
 -IncludeHealthCommission
 ```
 
+Official source readiness check:
+
+```bash
+npm run diagnose:official -- --company "企业名称"
+```
+
+This check is read-only and never substitutes for required official screenshots.
+
 ## Required Content Standards
 
 - Henan portals must be search result pages, not home pages with a filled search box.

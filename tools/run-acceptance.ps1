@@ -34,6 +34,15 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
   $OutputRoot = Join-Path $env:TEMP ("ccb-acceptance-" + [guid]::NewGuid().ToString("N"))
 }
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
+if ([string]::IsNullOrWhiteSpace($env:POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS)) {
+  $env:POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS = "3000"
+}
+if ([string]::IsNullOrWhiteSpace($env:POST_LOAN_JUDGMENT_FAST_FAIL_AUTH_REQUIRED)) {
+  $env:POST_LOAN_JUDGMENT_FAST_FAIL_AUTH_REQUIRED = "1"
+}
+if ([string]::IsNullOrWhiteSpace($env:POST_LOAN_JUDGMENT_HOME_FAST_FAIL_TIMEOUT_MS)) {
+  $env:POST_LOAN_JUDGMENT_HOME_FAST_FAIL_TIMEOUT_MS = "8000"
+}
 
 function Invoke-Step([string]$Name, [scriptblock]$Body) {
   Write-Host "== $Name"

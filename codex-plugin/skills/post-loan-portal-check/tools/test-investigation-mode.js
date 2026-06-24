@@ -10,8 +10,10 @@ function withTempSettings(mode, fn) {
   fs.writeFileSync(settingsFile, JSON.stringify({ investigationMode: mode }), "utf8");
   const previous = process.env.POST_LOAN_INVESTIGATION_MODE;
   const previousAck = process.env.POST_LOAN_DEEP_ACK;
+  const previousManagedConfirmationWait = process.env.POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS;
   process.env.POST_LOAN_INVESTIGATION_MODE = "";
   process.env.POST_LOAN_DEEP_ACK = "";
+  process.env.POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS = "";
   try {
     return fn(settingsFile);
   } finally {
@@ -19,6 +21,8 @@ function withTempSettings(mode, fn) {
     else process.env.POST_LOAN_INVESTIGATION_MODE = previous;
     if (previousAck == null) delete process.env.POST_LOAN_DEEP_ACK;
     else process.env.POST_LOAN_DEEP_ACK = previousAck;
+    if (previousManagedConfirmationWait == null) delete process.env.POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS;
+    else process.env.POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS = previousManagedConfirmationWait;
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -29,6 +33,7 @@ withTempSettings("standard", () => {
   assert.strictEqual(mode.includeCredentialed, false);
   assert.strictEqual(mode.lowRiskOcr, true);
   assert.strictEqual(mode.graphDepth, 3);
+  assert.strictEqual(mode.managedConfirmationWaitMs, 45000);
 });
 
 withTempSettings("enhanced", () => {
@@ -58,6 +63,16 @@ withTempSettings("expert", () => {
   assert.strictEqual(accepted.retryLevel, "expert");
   assert.strictEqual(accepted.challengeRiskTemplate, "expert-aggressive");
   assert.strictEqual(accepted.graphDepth, 6);
+  fs.rmSync(consentFile, { force: true });
+});
+
+withTempSettings("expert", () => {
+  const consentFile = path.join(os.tmpdir(), `ccb-expert-consent-${Date.now()}-managed-wait.json`);
+  fs.writeFileSync(consentFile, JSON.stringify({ deepInvestigationAccepted: true, acceptedAt: new Date().toISOString() }), "utf8");
+  process.env.POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS = "3000";
+  const accepted = resolveInvestigationMode({ requestedMode: "expert", consentFile });
+  assert.strictEqual(accepted.mode, InvestigationMode.EXPERT);
+  assert.strictEqual(accepted.managedConfirmationWaitMs, 3000);
   fs.rmSync(consentFile, { force: true });
 });
 

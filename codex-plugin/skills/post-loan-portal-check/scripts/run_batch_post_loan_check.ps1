@@ -25,6 +25,15 @@ $ErrorActionPreference = "Stop"
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+if ([string]::IsNullOrWhiteSpace($env:POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS)) {
+  $env:POST_LOAN_MANAGED_CONFIRMATION_WAIT_MS = "3000"
+}
+if ([string]::IsNullOrWhiteSpace($env:POST_LOAN_JUDGMENT_FAST_FAIL_AUTH_REQUIRED)) {
+  $env:POST_LOAN_JUDGMENT_FAST_FAIL_AUTH_REQUIRED = "1"
+}
+if ([string]::IsNullOrWhiteSpace($env:POST_LOAN_JUDGMENT_HOME_FAST_FAIL_TIMEOUT_MS)) {
+  $env:POST_LOAN_JUDGMENT_HOME_FAST_FAIL_TIMEOUT_MS = "8000"
+}
 
 $CommandPath = $MyInvocation.MyCommand.Path
 if ([string]::IsNullOrWhiteSpace($CommandPath)) {

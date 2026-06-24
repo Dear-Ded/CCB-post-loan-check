@@ -110,6 +110,7 @@ class JudicialRunScheduler {
         this.audit?.record("judicial_attempt_failed", { sourceId, attempt, error: message });
         if (/aborted by capture budget/.test(message)) break;
         if (/cooling down/.test(message)) break;
+        if (options.nonRetryableErrorPattern && options.nonRetryableErrorPattern.test(message)) break;
       }
     }
     const reason = String(lastError && lastError.message ? lastError.message : lastError || "unknown");

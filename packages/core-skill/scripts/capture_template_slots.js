@@ -508,7 +508,9 @@ function sameCaptchaDigest(a, b) {
 }
 
 async function waitForStableCaptchaInput(page, subjectName, options = {}) {
-  const defaultWait = options.noPrompt ? 1000 : 45000;
+  const defaultWait = options.managedConfirmationWaitMs != null
+    ? Number(options.managedConfirmationWaitMs)
+    : (options.noPrompt ? 1000 : 45000);
   const captchaWaitMs = Number(process.env.POST_LOAN_CAPTCHA_INPUT_WAIT_MS || defaultWait);
   await waitUntil(page, `China Enforcement captcha input for ${subjectName}`, async () => {
     const value = await page.locator("#yzm").inputValue().catch(() => "");
@@ -870,14 +872,21 @@ async function captureJudgmentPortal(page, shots, add, company, audit, scheduler
   const attempts = Number(options.attempts || 3);
   const settleBaseMs = Number(options.settleBaseMs || 3000);
   const routeTimeoutMs = Number(options.routeTimeoutMs || process.env.POST_LOAN_JUDGMENT_ROUTE_TIMEOUT_MS || 26000);
+  const authorizedSessionFastFail = envFlag("POST_LOAN_JUDGMENT_FAST_FAIL_AUTH_REQUIRED", false);
   const browserContext = page.context();
   let currentPage = page;
+  if (authorizedSessionFastFail) {
+    audit?.record("judgment_authorized_session_fast_fail_enabled", { company });
+  }
   return scheduler.runWithRetries("judicial_wenshu", attempts, async (attempt) => {
     writeStage(`judgment capture attempt ${attempt}`);
     const route = JUDGMENT_ROUTES[(attempt - 1) % JUDGMENT_ROUTES.length];
-    return withTimeout(`judgment route ${route.id}`, routeTimeoutMs, async () => {
+    const effectiveRouteTimeoutMs = route.id === "wenshu_home" && authorizedSessionFastFail
+      ? Math.min(routeTimeoutMs, Number(process.env.POST_LOAN_JUDGMENT_HOME_FAST_FAIL_TIMEOUT_MS || 8000))
+      : routeTimeoutMs;
+    return withTimeout(`judgment route ${route.id}`, effectiveRouteTimeoutMs, async () => {
       const file = add("中国裁判文书网");
-      audit?.record("judgment_route_selected", { company, attempt, route: route.id, routeTimeoutMs });
+      audit?.record("judgment_route_selected", { company, attempt, route: route.id, routeTimeoutMs: effectiveRouteTimeoutMs });
       if (!currentPage || currentPage.isClosed()) currentPage = await browserContext.newPage();
       if (route.id === "wenshu_home") {
         await goto(currentPage, route.url(company));
@@ -895,7 +904,8 @@ async function captureJudgmentPortal(page, shots, add, company, audit, scheduler
           attempt,
           route: route.id,
           url: currentPage.url(),
-          title: await currentPage.title().catch(() => "")
+          title: await currentPage.title().catch(() => ""),
+          fastFail: authorizedSessionFastFail
         });
         throw new Error(`China Judgments Online ${route.id} requires an authorized session`);
       }
@@ -929,9 +939,16 @@ async function captureJudgmentPortal(page, shots, add, company, audit, scheduler
         await currentPage.close().catch(() => {});
         currentPage = await browserContext.newPage();
       }
+      if (authorizedSessionFastFail && /requires an authorized session/i.test(String(error.message || error))) {
+        throw error;
+      }
       throw error;
     });
-  }, { signal: options.signal, ignoreCooldown: Boolean(options.ignoreCooldown) });
+  }, {
+    signal: options.signal,
+    ignoreCooldown: Boolean(options.ignoreCooldown),
+    nonRetryableErrorPattern: authorizedSessionFastFail ? /requires an authorized session/i : null
+  });
 }
 
 async function warmOfficialJudicialOrigins(context, audit, options = {}) {
@@ -1755,6 +1772,7 @@ async function main() {
             challengeEngine,
             readyAttempts: investigationMode.enforcementReadyAttempts,
             confirmAttempts: investigationMode.enforcementConfirmAttempts,
+            managedConfirmationWaitMs: investigationMode.managedConfirmationWaitMs,
             recoveries: investigationMode.enforcementRecoveries,
             resultWaitMs: investigationMode.enforcementResultWaitMs,
             outDir
@@ -1772,6 +1790,7 @@ async function main() {
             challengeEngine,
             readyAttempts: investigationMode.enforcementReadyAttempts,
             confirmAttempts: investigationMode.enforcementConfirmAttempts,
+            managedConfirmationWaitMs: investigationMode.managedConfirmationWaitMs,
             recoveries: investigationMode.enforcementRecoveries,
             resultWaitMs: investigationMode.enforcementResultWaitMs,
             outDir

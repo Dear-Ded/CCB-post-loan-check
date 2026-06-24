@@ -21,6 +21,7 @@ assert.strictEqual(routeReadiness({ resultCapable: true }, "official_form_ready"
 assert.strictEqual(routeReadiness({ resultCapable: true }, "session_or_login_required"), "needs_authorized_session");
 assert.strictEqual(routeReadiness({ resultCapable: true }, "page_challenge_unresolved"), "needs_managed_confirmation");
 assert.strictEqual(routeReadiness({ resultCapable: true }, "blank_or_empty_official_page"), "unavailable");
+assert.strictEqual(routeReadiness({ resultCapable: false }, "network_access_denied"), "unavailable");
 
 const summary = summarize([
   { sourceType: "judgment", resultCapable: true, readiness: "needs_authorized_session", category: "session_or_login_required" },

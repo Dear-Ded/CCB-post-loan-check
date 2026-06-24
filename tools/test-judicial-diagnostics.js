@@ -9,15 +9,19 @@ const {
 
 assert.strictEqual(classifyMessage("China Enforcement did not reach a confirmed result page"), "result_state_unconfirmed");
 assert.strictEqual(classifyMessage("captcha changed before submit"), "page_challenge_unresolved");
+assert.strictEqual(classifyMessage("official_managed_confirmation_required"), "page_challenge_unresolved");
+assert.strictEqual(classifyMessage("page.goto: net::ERR_NETWORK_ACCESS_DENIED at https://wenshu.court.gov.cn/"), "network_access_denied");
 assert.strictEqual(classifyMessage("login required"), "session_or_login_required");
 assert.strictEqual(classifyMessage("China Judgments Online wenshu_search requires an authorized session"), "session_or_login_required");
 assert.strictEqual(classifyMessage("failed to load required subject and challenge fields"), "entry_or_page_unavailable");
+assert.strictEqual(classifyMessage("China Enforcement official enforcement entry unavailable after 6 attempts"), "entry_or_page_unavailable");
 assert.strictEqual(classifyMessage("no authorized judicial provider evidence was available"), "authorized_provider_missing");
 assert.strictEqual(classifyMessage("403 Forbidden WZWS-RAY waf"), "waf_or_static_resource_blocked");
 assert.strictEqual(classifyMessage("judicial_wenshu aborted by capture budget"), "capture_budget_exhausted");
 assert.strictEqual(readinessFromCategory("judgment", "official_form_ready"), "ready");
 assert.strictEqual(readinessFromCategory("judgment", "session_or_login_required"), "needs_authorized_session");
 assert.strictEqual(readinessFromCategory("official_navigation", "official_navigation_not_subject_result"), "navigation_only");
+assert.strictEqual(readinessFromCategory("official_navigation", "network_access_denied"), "unavailable");
 
 assert.strictEqual(classifyOfficialPageProbe({
   url: "https://zxgk.court.gov.cn/zhzxgk/",
@@ -31,6 +35,14 @@ assert.strictEqual(classifyOfficialPageProbe({
   textSample: "",
   responses: [{ status: 200, url: "https://zxgk.court.gov.cn/" }]
 }), "blank_or_empty_official_page");
+assert.strictEqual(classifyOfficialPageProbe({
+  error: "page.goto: net::ERR_NETWORK_ACCESS_DENIED at https://zxgk.court.gov.cn/"
+}), "network_access_denied");
+assert.strictEqual(classifyOfficialPageProbe({
+  url: "https://cjdh.court.gov.cn/performInformation.html",
+  officialNavigationOnly: true,
+  error: "page.goto: net::ERR_NETWORK_ACCESS_DENIED at https://cjdh.court.gov.cn/performInformation.html"
+}), "network_access_denied");
 assert.strictEqual(classifyOfficialPageProbe({
   hasNameField: true,
   hasChallengeField: true,
@@ -56,6 +68,7 @@ const categories = classifyEvents([
   { type: "judgment_portal_capture_failed", error: "result page was not validated" },
   { type: "enforcement_captcha_attempt_failed", textSample: "captcha error" },
   { type: "judicial_source_failure", reason: "cooling down until later" },
+  { type: "judicial_attempt_failed", reason: "page.goto: net::ERR_NETWORK_ACCESS_DENIED at https://wenshu.court.gov.cn/" },
   { type: "enforcement_official_route_unusable", category: "blank_or_empty_official_page" },
   { type: "enforcement_response", status: 400, url: "https://zxgk.court.gov.cn/static2/js/main.js" },
   { type: "enforcement_authorized_provider_used" }
@@ -64,6 +77,7 @@ const categories = classifyEvents([
 assert.deepStrictEqual(categories.map((item) => item.category), [
   "authorized_provider_used",
   "blank_or_empty_official_page",
+  "network_access_denied",
   "page_challenge_unresolved",
   "result_state_unconfirmed",
   "source_cooldown",

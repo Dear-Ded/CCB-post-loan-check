@@ -26,13 +26,14 @@ function asArray(value) {
 
 function classifyMessage(message) {
   const text = String(message || "");
+  if (/ERR_NETWORK_ACCESS_DENIED|net::ERR_NETWORK_ACCESS_DENIED|network access denied/i.test(text)) return "network_access_denied";
   if (/waf|WZWS|403 Forbidden|status\":?\s*403|status\":?\s*400|static resource|core resource/i.test(text)) return "waf_or_static_resource_blocked";
   if (/aborted by capture budget|capture budget/i.test(text)) return "capture_budget_exhausted";
   if (/cooling down|cooldown/i.test(text)) return "source_cooldown";
   if (/login|authorized session/i.test(text) || LOGIN_RE.test(text) || PLEASE_LOGIN_RE.test(text)) return "session_or_login_required";
-  if (/failed to load|required subject and challenge fields|Target page|closed|timeout|Timed out/i.test(text) || LOAD_FAILED_RE.test(text)) return "entry_or_page_unavailable";
+  if (/failed to load|required subject and challenge fields|official enforcement entry unavailable|Target page|closed|timeout|Timed out/i.test(text) || LOAD_FAILED_RE.test(text)) return "entry_or_page_unavailable";
   if (/result page was not validated|result_not_confirmed|not reach a result|did not reach a confirmed result/i.test(text) || NOT_CONFIRMED_RE.test(text) || STILL_NOT_CONFIRMED_RE.test(text)) return "result_state_unconfirmed";
-  if (/captcha|challenge/i.test(text) || CODE_RE.test(text) || CHECK_CODE_RE.test(text) || CONFIRM_ITEM_RE.test(text)) return "page_challenge_unresolved";
+  if (/captcha|challenge|managed_confirmation_required|managed confirmation/i.test(text) || CODE_RE.test(text) || CHECK_CODE_RE.test(text) || CONFIRM_ITEM_RE.test(text)) return "page_challenge_unresolved";
   if (/authorized judicial provider|authorized provider/i.test(text) || AUTH_JUDICIAL_RE.test(text)) return "authorized_provider_missing";
   return text ? "other" : "unknown";
 }
@@ -41,13 +42,17 @@ function classifyOfficialPageProbe(probe = {}) {
   const text = String(probe.textSample || probe.text || "");
   const title = String(probe.title || "");
   const url = String(probe.url || "");
-  const combined = `${title} ${text} ${url}`;
+  const error = String(probe.error || "");
+  const combined = `${title} ${text} ${url} ${error}`;
   const statuses = asArray(probe.responses)
     .map((item) => Number(item.status))
     .filter((status) => Number.isFinite(status));
   const hasBadOfficialResponse = statuses.some((status) => status === 400 || status === 403 || status >= 500);
   const textBlank = text.trim().length < 20 && title.trim().length === 0;
 
+  if (/ERR_NETWORK_ACCESS_DENIED|net::ERR_NETWORK_ACCESS_DENIED|network access denied/i.test(combined)) {
+    return "network_access_denied";
+  }
   if (probe.officialNavigationOnly || /cjdh\.court\.gov\.cn\/performInformation/i.test(combined)) {
     return "official_navigation_not_subject_result";
   }
@@ -92,6 +97,7 @@ function classifyEvents(events) {
     if (/judgment_portal_capture_failed/.test(type)) add(classifyMessage(message), event);
     if (/enforcement_captcha_attempt_failed|enforcement_captcha_changed_before_submit/.test(type)) add("page_challenge_unresolved", event);
     if (/enforcement_page_recovered/.test(type)) add("entry_or_page_unavailable", event);
+    if (/enforcement_official_entries_unavailable/.test(type)) add(event.category || "entry_or_page_unavailable", event);
     if (/official_route_preflight|enforcement_official_route_unusable|enforcement_ready_probe_failed/.test(type)) {
       add(event.category || classifyOfficialPageProbe(event.probe || event), event);
     }
@@ -118,6 +124,7 @@ function classifyEvents(events) {
 }
 
 function readinessFromCategory(sourceType, category) {
+  if (category === "network_access_denied" || category === "blank_or_empty_official_page" || category === "entry_or_page_unavailable") return "unavailable";
   if (sourceType === "official_navigation" || category === "official_navigation_not_subject_result") return "navigation_only";
   if (category === "official_form_ready" || category === "official_result_state") return "ready";
   if (category === "session_or_login_required") return "needs_authorized_session";

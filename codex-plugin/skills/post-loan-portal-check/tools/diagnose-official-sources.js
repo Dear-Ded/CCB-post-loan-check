@@ -68,6 +68,7 @@ function sourceRoutes(company) {
 }
 
 function routeReadiness(route, category) {
+  if (category === "network_access_denied" || category === "blank_or_empty_official_page" || category === "entry_or_page_unavailable") return "unavailable";
   if (route.resultCapable === false) return "navigation_only";
   if (category === "official_form_ready" || category === "official_result_state") return "ready";
   if (category === "session_or_login_required") return "needs_authorized_session";
@@ -140,7 +141,12 @@ async function probeRoute(page, route, timeoutMs) {
       responses: responses.slice(-8)
     };
   } catch (error) {
-    const category = "entry_or_page_unavailable";
+    const errorText = String(error.message || error);
+    const category = classifyOfficialPageProbe({
+      url: route.urlValue,
+      error: errorText,
+      officialNavigationOnly: route.resultCapable === false
+    });
     return {
       route: route.id,
       sourceType: route.sourceType,
@@ -149,7 +155,7 @@ async function probeRoute(page, route, timeoutMs) {
       ok: false,
       category,
       readiness: routeReadiness(route, category),
-      error: String(error.message || error)
+      error: errorText
     };
   } finally {
     page.off("response", onResponse);

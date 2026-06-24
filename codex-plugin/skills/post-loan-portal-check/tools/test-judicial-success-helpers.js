@@ -59,6 +59,8 @@ assert.ok(captureSource.includes("no_valid_persistent_session"), "runs without a
 assert.ok(captureSource.includes("POST_LOAN_JUDGMENT_INPUT_WAIT_MS"), "judgment search input wait must be configurable");
 assert.ok(captureSource.includes("POST_LOAN_JUDGMENT_HOME_INPUT_WAIT_MS"), "judgment home input wait must be configurable");
 assert.ok(captureSource.includes("includeEnforcement: false"), "formal warmup should not pre-scan enforcement routes before the required query");
+assert.ok(captureSource.includes("enforcement_managed_confirmation_required"), "managed confirmation should be recorded explicitly");
+assert.ok(captureSource.includes("official_managed_confirmation_required"), "managed confirmation should have a stable machine-readable reason");
 assert.ok(!captureSource.includes("案由|案件名称|文书/.test(initialText)"), "judgment home page navigation must not be accepted as a result page");
 assert.ok(!captureSource.includes("案由|案件名称|文书/.test(compact)"), "judgment capture validation must not accept the home page only because it contains navigation labels");
 assert.ok(!captureSource.includes("裁判日期|案由|案件名称"), "judgment placeholder text must not be accepted as a result page");

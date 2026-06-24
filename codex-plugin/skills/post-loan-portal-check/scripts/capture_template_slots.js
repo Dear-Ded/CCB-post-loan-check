@@ -624,6 +624,7 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
   const loadTimeoutMs = Number(process.env.POST_LOAN_ENFORCEMENT_LOAD_TIMEOUT_MS || (options.noPrompt ? 4000 : 8000));
   const fieldTimeoutMs = Number(process.env.POST_LOAN_ENFORCEMENT_FIELD_TIMEOUT_MS || (options.noPrompt ? 2500 : 8000));
   const settleMs = Number(process.env.POST_LOAN_ENFORCEMENT_SETTLE_MS || (options.noPrompt ? 700 : 2500));
+  const readinessFailures = [];
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     await page.waitForLoadState("domcontentloaded", { timeout: loadTimeoutMs }).catch(() => {});
     await page.waitForLoadState("networkidle", { timeout: loadTimeoutMs }).catch(() => {});
@@ -669,6 +670,7 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
       /400|403|Forbidden|Bad Request|页面不存在|访问异常|系统繁忙|Service Unavailable/i.test(`${probe.title || ""} ${probe.textSample || ""}`)
     );
     if (routeLooksUnusable) {
+      readinessFailures.push({ attempt, route: route.id, category, probe });
       audit?.record("enforcement_official_route_unusable", {
         label,
         attempt,
@@ -701,16 +703,38 @@ async function waitForEnforcementReady(page, label, audit, options = {}) {
       console.log(`${label} query page is not ready; retrying ${attempt + 1}/${maxAttempts}.`);
     }
     const failedProbe = await enforcementPageProbe(page).catch((error) => ({ error: String(error.message || error) }));
-      audit?.record("enforcement_ready_probe_failed", {
-        label,
-        attempt,
-        route: route.id,
-        category: classifyOfficialPageProbe(failedProbe),
-        probe: failedProbe
-      });
+    const failedCategory = classifyOfficialPageProbe(failedProbe);
+    readinessFailures.push({ attempt, route: route.id, category: failedCategory, probe: failedProbe });
+    audit?.record("enforcement_ready_probe_failed", {
+      label,
+      attempt,
+      route: route.id,
+      category: failedCategory,
+      probe: failedProbe
+    });
     await page.waitForTimeout((options.noPrompt ? 1000 : 4000) * attempt);
   }
-  throw new Error(`${label} query page failed to load required subject and challenge fields.`);
+  const categoryCounts = readinessFailures.reduce((acc, item) => {
+    const key = item.category || "entry_or_page_unavailable";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const dominantCategory = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || "entry_or_page_unavailable";
+  audit?.record("enforcement_official_entries_unavailable", {
+    label,
+    attempts: maxAttempts,
+    category: dominantCategory,
+    categoryCounts,
+    failures: readinessFailures.slice(-ENFORCEMENT_ROUTES.length)
+  });
+  await saveOfficialPageDiagnostic(page, options.outDir, "zxgk-official-entry-unavailable", audit, {
+    label,
+    attempts: maxAttempts,
+    reason: "official_entry_unavailable",
+    category: dominantCategory,
+    categoryCounts
+  }).catch(() => null);
+  throw new Error(`${label} official enforcement entry unavailable after ${maxAttempts} attempts: ${dominantCategory}`);
 }
 
 async function fillEnforcementQuery(page, name, codeOrId, options = {}) {
@@ -957,13 +981,19 @@ async function warmOfficialJudicialOrigins(context, audit, options = {}) {
           probe
         });
       } catch (error) {
+        const errorText = String(error.message || error);
+        const category = classifyOfficialPageProbe({
+          url,
+          error: errorText,
+          officialNavigationOnly: route.resultCapable === false
+        });
         const result = {
           route: route.id,
           sourceType: route.sourceType,
           url,
           ok: false,
-          category: "entry_or_page_unavailable",
-          error: String(error.message || error)
+          category,
+          error: errorText
         };
         results.push(result);
         audit?.record("official_route_preflight", result);
@@ -1077,7 +1107,26 @@ async function runEnforcementAfterCaptcha(page, subjectName, codeOrId, audit, op
       enabled: false,
       reason: "official_judicial_source_requires_managed_official_confirmation"
     });
-    const enteredCaptcha = await waitForStableCaptchaInput(page, subjectName, options);
+    let enteredCaptcha = "";
+    try {
+      enteredCaptcha = await waitForStableCaptchaInput(page, subjectName, options);
+    } catch (error) {
+      const diagnostic = await getEnforcementDiagnosticState(page).catch(() => null);
+      audit?.record("enforcement_managed_confirmation_required", {
+        subjectName,
+        attempt,
+        mode,
+        url: page.url(),
+        diagnostic,
+        reason: "official_managed_confirmation_required"
+      });
+      await saveOfficialPageDiagnostic(page, options.outDir, `zxgk-${subjectName}-managed-confirmation-required`, audit, {
+        subjectName,
+        attempt,
+        reason: "official_managed_confirmation_required"
+      }).catch(() => null);
+      throw new Error(`China Enforcement ${subjectName}: official managed confirmation required before query submission`);
+    }
     if (enteredCaptcha.trim().length < 4) continue;
     await fillAndVerifyEnforcementFields(page, subjectName, codeOrId);
     const currentDiagnostic = await getEnforcementDiagnosticState(page);

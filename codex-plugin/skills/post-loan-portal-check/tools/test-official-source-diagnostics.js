@@ -6,13 +6,13 @@ const {
   summarize
 } = require("./diagnose-official-sources");
 
-const args = parseArgs(["--company", "濮阳测试有限公司", "--json", "--timeout-ms", "9000", "--fail-on-unready"]);
-assert.strictEqual(args.company, "濮阳测试有限公司");
+const args = parseArgs(["--company", "主体A", "--json", "--timeout-ms", "9000", "--fail-on-unready"]);
+assert.strictEqual(args.company, "主体A");
 assert.strictEqual(args.json, true);
 assert.strictEqual(args.timeoutMs, 9000);
 assert.strictEqual(args.failOnUnready, true);
 
-const routes = sourceRoutes("濮阳测试有限公司");
+const routes = sourceRoutes("主体A");
 assert.ok(routes.some((route) => route.sourceType === "judgment" && route.urlValue.includes("wenshu.court.gov.cn")));
 assert.ok(routes.some((route) => route.sourceType === "enforcement" && route.urlValue.includes("zxgk.court.gov.cn")));
 assert.ok(routes.some((route) => route.sourceType === "official_navigation" && route.resultCapable === false));

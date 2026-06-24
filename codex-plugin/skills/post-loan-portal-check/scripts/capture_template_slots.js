@@ -407,9 +407,9 @@ async function lookupOrgCode(context, company) {
   const page = await context.newPage();
   try {
     const queries = [
-      `"${company}" "统一社会信用代码"`,
-      `${company} 统一社会信用代码`,
-      `${company} 工商信息 统一社会信用代码`
+      `"${company}" "统一社会信用代码或组织机构代码"`,
+      `${company} 统一社会信用代码或组织机构代码`,
+      `${company} 工商信息 统一社会信用代码或组织机构代码`
     ];
     for (const query of queries) {
       for (const url of [bingUrl(query), baiduUrl(query, 0)]) {
@@ -1403,18 +1403,22 @@ async function main() {
   const subjectType = args["subject-type"] || "enterprise";
   const includeHealthCommission = Boolean(args["include-health-commission"]);
   const smokeQuick = Boolean(args["smoke-quick"]);
+  const nonJudicialMode = Boolean(args["non-judicial"]);
   const skipSearch = Boolean(args["skip-search"]);
   const judicialMode = args["judicial-mode"] || ChallengeMode.ASSISTED;
+  const effectiveJudicialMode = nonJudicialMode ? ChallengeMode.BLOCKED : judicialMode;
   const noPrompt = Boolean(args["no-prompt"]);
   const headless = Boolean(args.headless) || noPrompt;
-  const requiresForeground = !noPrompt && !smokeQuick && judicialMode !== ChallengeMode.BLOCKED;
+  const requiresForeground = !noPrompt && !smokeQuick && !nonJudicialMode && effectiveJudicialMode !== ChallengeMode.BLOCKED;
   const persons = args.person.map(parsePerson);
 
   if (!company || !outDir) throw new Error("--company and --out-dir are required");
   if (subjectType === "person" && !orgCode) throw new Error("--org-code must be the personal ID number for person subjects");
   writeStage(`capture started for ${company}`);
 
-  if (!smokeQuick && judicialMode !== ChallengeMode.BLOCKED) {
+  if (nonJudicialMode) {
+    console.log("Non-judicial public-source mode: official judicial/execution sources are excluded from this release variant.");
+  } else if (!smokeQuick && effectiveJudicialMode !== ChallengeMode.BLOCKED) {
     if (noPrompt) {
       console.log("Running in background mode. Official portals and validation checks will run automatically.");
     } else {
@@ -1431,8 +1435,8 @@ async function main() {
   writeStage("audit initialized");
   const investigationMode = resolveInvestigationMode({ requestedMode: args.mode || args["investigation-mode"], audit });
   const runtimePolicy = loadRuntimePolicy({ skillRoot: path.join(__dirname, ".."), audit, investigationMode });
-  audit.record("run_started", { company, subjectType, includeHealthCommission, smokeQuick, judicialMode, noPrompt, investigationMode: investigationMode.mode });
-  const skipNonEssentialSourceQueries = noPrompt || envFlag("POST_LOAN_DISABLE_BACKGROUND_SOURCE_ENRICHMENT", false);
+  audit.record("run_started", { company, subjectType, includeHealthCommission, smokeQuick, nonJudicialMode, judicialMode: effectiveJudicialMode, noPrompt, investigationMode: investigationMode.mode });
+  const skipNonEssentialSourceQueries = !nonJudicialMode && (noPrompt || envFlag("POST_LOAN_DISABLE_BACKGROUND_SOURCE_ENRICHMENT", false));
   const chromeCandidates = [
     process.env.POST_LOAN_CHROME_EXE,
     "/usr/bin/google-chrome",
@@ -1462,7 +1466,7 @@ async function main() {
     return fs.existsSync(candidate);
   }) || "python";
   const sessionManager = new SessionManager({ audit });
-  const profileScope = smokeQuick ? "government" : "judicial";
+  const profileScope = (smokeQuick || nonJudicialMode) ? "government" : "judicial";
   const persistentProfile = sessionManager.profilePath(profileScope);
   const previousSession = sessionManager.readState(profileScope);
   const useRunProfile = smokeQuick || !previousSession || envFlag("POST_LOAN_FORCE_CLEAN_PROFILE", noPrompt && !previousSession);
@@ -1513,7 +1517,7 @@ async function main() {
     maxNodes: Number(args["graph-max-nodes"] || envNumber(["POST_LOAN_GRAPH_MAX_NODES", "POST_LOAN_GRAPH_MAX_NODES"], investigationMode.graphMaxNodes)),
     audit
   });
-  const judicialPolicy = new JudicialSourcePolicy({ mode: judicialMode, audit });
+  const judicialPolicy = new JudicialSourcePolicy({ mode: effectiveJudicialMode, audit });
   const challengeEngine = new ChallengeEngine({
     audit,
     policyFile: investigationMode.challengePolicyFile || process.env.POST_LOAN_CHALLENGE_POLICY,
@@ -1537,9 +1541,9 @@ async function main() {
   writeStage("browser context launched");
 
   const page = await context.newPage();
-  const enforcementPage = smokeQuick ? null : await context.newPage();
+  const enforcementPage = (smokeQuick || nonJudicialMode) ? null : await context.newPage();
   writeStage("browser pages prepared");
-  if (!smokeQuick && investigationMode.judicialWarmup) {
+  if (!smokeQuick && !nonJudicialMode && investigationMode.judicialWarmup) {
     if (noPrompt) {
       audit.record("official_judicial_origins_warmup_skipped", { reason: "background_mode" });
       writeStage("official judicial origins warmup skipped for background mode");
@@ -1557,7 +1561,7 @@ async function main() {
   const add = makeAdd(outDir, shots);
 
   let orgCodeLookup = null;
-  if (subjectType === "enterprise" && !orgCode && !smokeQuick) {
+  if (subjectType === "enterprise" && !orgCode && !smokeQuick && !nonJudicialMode) {
     console.log("No unified social credit code was provided; trying public lookup first.");
     orgCodeLookup = await lookupOrgCode(context, company);
     orgCode = orgCodeLookup.code;
@@ -1571,11 +1575,15 @@ async function main() {
     }
   }
 
-  if (!smokeQuick && judicialPolicy.shouldBlock()) {
-    audit.record("judicial_sources_blocked", { company, mode: judicialMode });
+  if (nonJudicialMode) {
+    audit.record("non_judicial_public_sources_report", { company });
   }
 
-  const judicialEnabled = !smokeQuick && !judicialPolicy.shouldBlock();
+  if (!smokeQuick && judicialPolicy.shouldBlock()) {
+    audit.record("judicial_sources_blocked", { company, mode: effectiveJudicialMode, nonJudicialMode });
+  }
+
+  const judicialEnabled = !nonJudicialMode && !smokeQuick && !judicialPolicy.shouldBlock();
 
   if (judicialEnabled) {
     writeStage("judicial preparation started");
@@ -1893,8 +1901,12 @@ async function main() {
     audit.record("search_skipped", { company });
   }
 
-  assertRequiredJudicialEvidence(shots, { smokeQuick, judicialEnabled, persons });
-  writeStage("required judicial evidence asserted");
+  if (!nonJudicialMode) {
+    assertRequiredJudicialEvidence(shots, { smokeQuick, judicialEnabled, persons });
+    writeStage("required judicial evidence asserted");
+  } else {
+    writeStage("non-judicial public-source evidence contract selected");
+  }
 
   const manifest = {
     company,
@@ -1903,8 +1915,11 @@ async function main() {
     subjectType,
     includeHealthCommission,
     smokeQuick,
+    nonJudicialMode,
+    reportVariant: nonJudicialMode ? "non_judicial_public_sources" : "formal_official_judicial_required",
     skipSearch,
     judicialEnabled,
+    judicialMode: effectiveJudicialMode,
     investigationMode,
     searchResult,
     sourceHealth,
@@ -1925,14 +1940,20 @@ async function main() {
       status: "valid",
       company,
       smokeQuick,
-      judicialMode,
+      judicialMode: effectiveJudicialMode,
       lastRunAt: new Date().toISOString()
     });
   }
   audit.flush();
   await context.close();
   if (browser) await browser.close().catch(() => {});
-  if (useRunProfile || !browserSession.persistent) fs.rmSync(profile, { recursive: true, force: true });
+  if (useRunProfile || !browserSession.persistent) {
+    try {
+      fs.rmSync(profile, { recursive: true, force: true });
+    } catch (error) {
+      audit.record("browser_profile_cleanup_failed", { profile, error: String(error.message || error) });
+    }
+  }
   console.log(path.join(outDir, "template-slots-manifest.json"));
 }
 

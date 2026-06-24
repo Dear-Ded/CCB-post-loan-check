@@ -10,6 +10,8 @@ param(
 
   [switch]$SmokeQuick,
 
+  [switch]$NonJudicial,
+
   [switch]$NoPrompt,
 
   [switch]$IncludeHealthCommission,
@@ -106,6 +108,7 @@ function Write-WrapperFailureSummary([string]$Reason, [string]$Phase = "doubao_m
       company = $CompanyName
       orgCode = $OrgCode
       mode = $Mode
+      nonJudicialMode = $true
       judicialMode = $JudicialMode
       phase = $Phase
       reason = $Reason
@@ -130,10 +133,12 @@ function Write-WrapperFailureSummary([string]$Reason, [string]$Phase = "doubao_m
 }
 
 try {
+  $NonJudicial = $true
   $runnerParameters = @{
     CompanyName = $CompanyName
-    JudicialMode = $JudicialMode
+    JudicialMode = "blocked"
     Mode = $Mode
+    NonJudicial = $true
   }
   if (-not [string]::IsNullOrWhiteSpace($OrgCode)) { $runnerParameters.OrgCode = $OrgCode }
   if ($Person.Count -gt 0) { $runnerParameters.Person = $Person }

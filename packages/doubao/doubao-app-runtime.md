@@ -7,7 +7,7 @@
 ```bash
 bash packages/doubao/run_doubao_app.sh \
   --company "企业名" \
-  --org-code "统一社会信用代码" \
+  --org-code "统一社会信用代码或组织机构代码" \
   --person "姓名|身份证号" \
   --mode enhanced \
   --json

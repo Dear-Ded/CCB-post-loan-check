@@ -16,7 +16,7 @@ Do not call the bash compatibility script from WorkBuddy product surfaces.
 .\workbuddy\run_workbuddy.ps1 `
   -CompanyName "{companyName}" `
   -OrgCode "{orgCode}" `
-  -Person "张三|身份证号" `
+  -Person "自然人A|身份证号" `
   -Mode "enhanced" `
   -Json
 ```

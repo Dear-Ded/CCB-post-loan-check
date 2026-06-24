@@ -13,7 +13,7 @@ const captureSource = fs.readFileSync(path.join(__dirname, "..", "packages", "co
 
 assert.ok(JUDGMENT_ROUTES.length >= 2, "judgment source should have multiple entry routes");
 assert.ok(ENFORCEMENT_ROUTES.length >= 2, "enforcement source should have multiple entry routes");
-assert.ok(JUDGMENT_ROUTES.some((route) => route.url("濮阳测试有限公司").includes("wenshu.court.gov.cn")));
+assert.ok(JUDGMENT_ROUTES.some((route) => route.url("主体A").includes("wenshu.court.gov.cn")));
 assert.ok(ENFORCEMENT_ROUTES.some((route) => route.url().includes("zxgk.court.gov.cn")));
 assert.strictEqual(ENFORCEMENT_ROUTES[0].id, "zhzxgk_query", "enterprise enforcement route should remain first");
 assert.strictEqual(ENFORCEMENT_ROUTES[1].id, "shixin_query", "working official dishonest-enforcement form should be tried before home fallbacks");

@@ -6,12 +6,12 @@ function shot(slot, name, url) {
 }
 
 const complete = {
-  company: "濮阳测试有限公司",
+  company: "主体A",
   smokeQuick: false,
   skipSearch: false,
   judicialEnabled: true,
   includeHealthCommission: true,
-  persons: [{ name: "张三" }],
+  persons: [{ name: "自然人A" }],
   searchResult: { skipped: false, ok: true, engine: "bing", pages: 3 },
   screenshots: [
     shot(1, "河南省应急管理厅", "https://yjglt.henan.gov.cn/"),
@@ -20,7 +20,7 @@ const complete = {
     shot(4, "河南省卫生健康委员会", "https://wsjkw.henan.gov.cn/"),
     shot(5, "中国裁判文书网", "https://wenshu.court.gov.cn/"),
     shot(6, "中国执行信息公开网", "https://zxgk.court.gov.cn/zhzxgk/"),
-    shot(7, "个人被执行信息-张三", "https://zxgk.court.gov.cn/zhzxgk/"),
+    shot(7, "个人被执行信息-自然人A", "https://zxgk.court.gov.cn/zhzxgk/"),
     shot(8, "Bing搜索-page-1", "https://www.bing.com/search?q=x"),
     shot(9, "Bing搜索-page-2", "https://www.bing.com/search?q=x&first=11"),
     shot(10, "Bing搜索-page-3", "https://www.bing.com/search?q=x&first=21")
@@ -43,7 +43,7 @@ const authorizedProviderJudicial = {
     ...missingJudicial.screenshots.filter((item) => !item.name.includes("中国执行信息公开网") && !item.name.includes("个人被执行信息")),
     { ...shot(11, "授权司法数据-裁判文书", "authorized-provider://judgment"), authorizedProvider: true },
     { ...shot(12, "授权司法数据-执行信息", "authorized-provider://enforcement"), authorizedProvider: true },
-    { ...shot(13, "授权司法数据-个人被执行信息-张三", "authorized-provider://person"), authorizedProvider: true }
+    { ...shot(13, "授权司法数据-个人被执行信息-自然人A", "authorized-provider://person"), authorizedProvider: true }
   ]
 };
 assert.strictEqual(buildRequiredEvidence(authorizedProviderJudicial).ok, false);
@@ -84,5 +84,19 @@ assert.deepStrictEqual(
   missingSearchEvidence.items.find((item) => item.id === "search_engine_pages").missingPages,
   [2]
 );
+
+const nonJudicialPublicSources = {
+  ...complete,
+  nonJudicialMode: true,
+  reportVariant: "non_judicial_public_sources",
+  judicialEnabled: false,
+  screenshots: complete.screenshots.filter((item) => (
+    !String(item.url).includes("wenshu.court.gov.cn") &&
+    !String(item.url).includes("zxgk.court.gov.cn") &&
+    !String(item.name).includes("涓汉琚墽琛屼俊鎭?")
+  ))
+};
+assert.strictEqual(buildRequiredEvidence(nonJudicialPublicSources).ok, true);
+assert.doesNotThrow(() => assertRequiredEvidence(nonJudicialPublicSources));
 
 console.log("evidence-contract ok");

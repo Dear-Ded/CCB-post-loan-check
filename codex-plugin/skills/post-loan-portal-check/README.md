@@ -35,8 +35,8 @@ python3 -m pip install -r requirements.txt --user
 
 ```powershell
 .\run-post-loan-check.ps1 `
-  -CompanyName "濮阳豫能综合能源有限公司" `
-  -OrgCode "91410926MACJQ2HCXH" `
+  -CompanyName "企业名称" `
+  -OrgCode "统一社会信用代码或组织机构代码" `
   -TemplateSlots
 ```
 
@@ -54,8 +54,8 @@ WorkBuddy JSON：
 
 ```powershell
 .\packages\core-skill\workbuddy\run_workbuddy.ps1 `
-  -CompanyName "濮阳豫能综合能源有限公司" `
-  -OrgCode "91410926MACJQ2HCXH" `
+  -CompanyName "企业名称" `
+  -OrgCode "统一社会信用代码或组织机构代码" `
   -Json
 ```
 
@@ -63,8 +63,8 @@ WorkBuddy JSON：
 
 ```bash
 bash packages/doubao/run_doubao_app.sh \
-  --company "濮阳豫能综合能源有限公司" \
-  --org-code "91410926MACJQ2HCXH" \
+  --company "企业名称" \
+  --org-code "统一社会信用代码或组织机构代码" \
   --json
 ```
 
@@ -133,7 +133,7 @@ batch-post-loan-{yyyyMMdd-HHmmss}-{pid}/
 官方源预检：
 
 ```bash
-npm run diagnose:official -- --company "濮阳豫能综合能源有限公司"
+npm run diagnose:official -- --company "企业名称"
 ```
 
 预检只读取官方入口状态并输出 JSON，不提交查询，不生成替代证据；用于判断当前运行环境是否已经具备正式司法/执行截图条件。

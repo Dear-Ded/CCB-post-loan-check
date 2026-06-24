@@ -28,6 +28,9 @@ assertContains("packages/doubao/run_doubao_app.sh", "--person", "must accept per
 assertContains("packages/doubao/run_doubao_app.sh", /PERSON_VALUES=\(\)/, "must store personal enforcement subjects");
 assertContains("packages/doubao/run_doubao_app.sh", /args\+=\("--person" "\$person"\)/, "must forward personal enforcement subjects");
 assertContains("packages/doubao/run_doubao_app.sh", "--smoke-quick", "must accept internal smoke flag used by acceptance tooling");
+assertContains("packages/doubao/run_doubao_app.sh", 'NON_JUDICIAL="1"', "Doubao mobile Linux entrypoint must load the non-judicial public-source release by default");
+assertContains("packages/doubao/run_doubao_app.sh", "--non-judicial", "Doubao mobile Linux entrypoint must forward non-judicial release mode");
+assertContains("packages/doubao/run_doubao_app.sh", /"--judicial-mode" "blocked".*"--non-judicial"/, "Doubao mobile Linux entrypoint must not expose formal judicial capture");
 assertContains("packages/doubao/run_doubao_app.sh", "--mode", "must accept investigation mode");
 assertContains("packages/doubao/run_doubao_app.sh", /MODE="\$\{POST_LOAN_INVESTIGATION_MODE:-\}"/, "Doubao Linux runner must not force enhanced mode over saved settings");
 assertContains("packages/doubao/run_doubao_app.sh", /\[\[ -n "\$MODE" \]\] && args\+=\("--mode" "\$MODE"\)/, "Doubao Linux runner must only pass mode when explicitly configured");
@@ -47,6 +50,9 @@ for (const file of [
   assertContains(file, "Write-WrapperFailureSummary", "must create structured wrapper failure summaries");
   assertContains(file, "finalReportGenerated", "must explicitly mark failed non-final wrapper runs");
 }
+
+assertContains("packages/doubao/run_doubao_mobile.ps1", "NonJudicial = $true", "Doubao mobile PowerShell wrapper must force non-judicial release mode");
+assertContains("packages/doubao/run_doubao_mobile.ps1", 'JudicialMode = "blocked"', "Doubao mobile PowerShell wrapper must block formal judicial capture");
 
 for (const file of [
   "packages/core-skill/scripts/run_post_loan_check.ps1",

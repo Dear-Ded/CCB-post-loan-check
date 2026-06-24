@@ -11,6 +11,7 @@ param(
   [string[]]$Person = @(),
   [switch]$IncludeHealthCommission,
   [switch]$SmokeQuick,
+  [switch]$NonJudicial,
   [switch]$SkipSearch,
 
 [ValidateSet("", "standard", "enhanced", "deep", "expert")]
@@ -332,7 +333,7 @@ function Invoke-NodeWithOptionalTimeout {
   )
 
   if ($MaxCaptureSeconds -le 0) {
-    & $FilePath @Arguments
+    & $FilePath @Arguments | ForEach-Object { Write-Host $_ }
     return $LASTEXITCODE
   }
 
@@ -388,11 +389,16 @@ if ($effectiveTemplateSlots) {
   foreach ($p in $Person) { $captureArgs += @("--person", $p) }
   if ($IncludeHealthCommission) { $captureArgs += "--include-health-commission" }
   if ($SmokeQuick) { $captureArgs += "--smoke-quick" }
+  if ($NonJudicial) { $captureArgs += "--non-judicial" }
   if ($SkipSearch) { $captureArgs += "--skip-search" }
   if (-not [string]::IsNullOrWhiteSpace($Mode)) { $captureArgs += @("--mode", $Mode) }
   if ($effectiveHeadless) { $captureArgs += "--headless" }
   if ($NoPrompt) { $captureArgs += "--no-prompt" }
-  if (-not [string]::IsNullOrWhiteSpace($JudicialMode)) { $captureArgs += @("--judicial-mode", $JudicialMode) }
+  if ($NonJudicial) {
+    $captureArgs += @("--judicial-mode", "blocked")
+  } elseif (-not [string]::IsNullOrWhiteSpace($JudicialMode)) {
+    $captureArgs += @("--judicial-mode", $JudicialMode)
+  }
   Write-Stage "starting portal capture"
   $global:LASTEXITCODE = Invoke-NodeWithOptionalTimeout -FilePath $NodeExe -Arguments $captureArgs -TimeoutPhase "portal_capture_timeout"
 } else {

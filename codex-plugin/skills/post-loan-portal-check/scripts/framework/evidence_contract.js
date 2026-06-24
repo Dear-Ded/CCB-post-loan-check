@@ -63,7 +63,8 @@ function makeSearchPagesItem({ required, shots }) {
 
 function buildRequiredEvidence(manifest) {
   const shots = validShots(manifest);
-  const judicialRequired = manifest.smokeQuick !== true && manifest.judicialEnabled !== false;
+  const nonJudicialMode = manifest.nonJudicialMode === true || manifest.reportVariant === "non_judicial_public_sources";
+  const judicialRequired = !nonJudicialMode && manifest.smokeQuick !== true && manifest.judicialEnabled !== false;
   const searchRequired = manifest.skipSearch !== true && manifest.searchResult?.skipped !== true;
   const healthRequired = manifest.includeHealthCommission === true;
   const persons = Array.isArray(manifest.persons) ? manifest.persons : [];

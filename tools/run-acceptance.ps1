@@ -1,6 +1,6 @@
 param(
   [string]$CompanyName = "",
-  [string]$OrgCode = "91410926MACJQ2HCXH",
+  [string]$OrgCode = "UNIFIED_SOCIAL_CREDIT_CODE",
   [string]$SecondCompanyName = "",
   [switch]$Live,
   [ValidateSet("all", "platforms", "batch", "search", "monitor")]

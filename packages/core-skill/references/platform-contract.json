@@ -27,7 +27,7 @@
   "inputContract": {
     "single": {
       "companyName": { "type": "string", "required": true, "description": "企业名称。用户只输入这个也必须能启动。" },
-      "orgCode": { "type": "string", "required": false, "description": "统一社会信用代码/组织机构代码。不填时系统尽力查询；不确定时提示补充。" },
+      "orgCode": { "type": "string", "required": false, "description": "统一社会信用代码或组织机构代码/组织机构代码。不填时系统尽力查询；不确定时提示补充。" },
       "mode": { "type": "enum", "values": ["standard", "enhanced", "deep", "expert"], "default": "enhanced", "description": "查询模式。跨平台入口必须原样传入同一核心执行器。" },
       "legalRepresentativeName": { "type": "string", "required": false, "description": "仅在用户要求同步个人被执行信息时使用。" },
       "actualControllerName": { "type": "string", "required": false, "description": "仅在用户要求同步个人被执行信息时使用。" },

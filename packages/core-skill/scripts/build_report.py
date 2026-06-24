@@ -161,6 +161,8 @@ def main():
     skill_root = Path(os.environ.get("POST_LOAN_SKILL_ROOT", Path(__file__).resolve().parents[1]))
     default_template_name = text_from_codepoints(36151, 21518, 26597, 35810, 27169, 26495) + ".docx"
     default_report_prefix = text_from_codepoints(36151, 21518, 26597, 35810)
+    if manifest.get("nonJudicialMode") or manifest.get("reportVariant") == "non_judicial_public_sources":
+        default_report_prefix = default_report_prefix + "-" + text_from_codepoints(38750, 21496, 27861, 20844, 24320, 28304)
     template_path = Path(args.template) if args.template else skill_root / "assets" / default_template_name
     if not template_path.exists():
         raise FileNotFoundError(f"Template not found: {template_path}")

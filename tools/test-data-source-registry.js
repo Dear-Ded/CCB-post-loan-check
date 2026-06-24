@@ -80,14 +80,14 @@ async function main() {
   assert.equal(health.ok, true);
   assert.equal(health.status, 200);
 
-  const [result] = await registry.query("濮阳豫能综合能源有限公司");
+  const [result] = await registry.query("企业名称");
   assert.equal(result.ok, true);
   assert.equal(result.normalized.schemaVersion, "subject-intelligence/v0");
   assert.equal(result.normalized.records.length, 1);
   assert.equal(result.normalized.records[0].sourceId, "local_public_api");
-  assert.match(result.normalized.records[0].title, /濮阳豫能综合能源有限公司/);
+  assert.match(result.normalized.records[0].title, /企业名称/);
   assert.equal(result.normalized.records[0].relatedSubjects[0].name, "测试关联企业");
-  assert(requests.some((item) => item.url.includes(encodeURIComponent("濮阳豫能综合能源有限公司"))));
+  assert(requests.some((item) => item.url.includes(encodeURIComponent("企业名称"))));
   assert(requests.some((item) => item.apiKey === "test-token"));
   assert.equal(JSON.parse(fs.readFileSync(stateFile, "utf8")).sources["datasource:local_public_api"].status, "healthy");
 

@@ -12,6 +12,8 @@ param(
 
   [switch]$SmokeQuick,
 
+  [switch]$NonJudicial,
+
   [switch]$NoPrompt,
 
   [switch]$SkipSearch,
@@ -105,6 +107,7 @@ function Write-WrapperFailureSummary([string]$Reason, [string]$Phase = "doubao_l
       company = $CompanyName
       orgCode = $OrgCode
       mode = $Mode
+      nonJudicialMode = [bool]$NonJudicial
       judicialMode = $JudicialMode
       phase = $Phase
       reason = $Reason
@@ -144,7 +147,7 @@ try {
   $runnerParameters = @{
     CompanyName = $CompanyName
     TemplateSlots = $true
-    JudicialMode = $JudicialMode
+    JudicialMode = $(if ($NonJudicial) { "blocked" } else { $JudicialMode })
     Mode = $Mode
   }
 
@@ -152,6 +155,7 @@ try {
   if (-not [string]::IsNullOrWhiteSpace($OutputRoot)) { $runnerParameters.OutputRoot = $OutputRoot }
   if ($IncludeHealthCommission) { $runnerParameters.IncludeHealthCommission = $true }
   if ($SmokeQuick) { $runnerParameters.SmokeQuick = $true }
+  if ($NonJudicial) { $runnerParameters.NonJudicial = $true }
   if ($NoPrompt) { $runnerParameters.NoPrompt = $true }
   if ($SkipSearch) { $runnerParameters.SkipSearch = $true }
   if ($Person.Count -gt 0 -and -not $isBatch) { $runnerParameters.Person = $Person }

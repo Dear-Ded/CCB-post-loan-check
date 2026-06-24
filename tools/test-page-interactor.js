@@ -48,8 +48,8 @@ function makePage({ visible = {}, values = {}, validateOnRoute = "route-2" } = {
   const audit = { record: (type, payload) => auditEvents.push({ type, payload }) };
 
   const page = makePage({ visible: { "#name": true, "#submit": true } });
-  assert.strictEqual(await fillInputReliably(page, "#name", "濮阳测试有限公司", { audit, settleMs: 0 }), true);
-  assert.strictEqual(page.state.values["#name"], "濮阳测试有限公司");
+  assert.strictEqual(await fillInputReliably(page, "#name", "主体A", { audit, settleMs: 0 }), true);
+  assert.strictEqual(page.state.values["#name"], "主体A");
   assert(auditEvents.some((event) => event.type === "page_input_filled"));
 
   assert.strictEqual(await fillInputReliably(page, "#missing", "value", { audit, settleMs: 0 }), false);

@@ -23,8 +23,8 @@ If the user also asks for legal representative or controller personal enforcemen
 ```bash
 bash packages/doubao/preflight_doubao_app.sh
 bash packages/doubao/run_doubao_app.sh \
-  --company "濮阳豫能综合能源有限公司" \
-  --org-code "91410926MACJQ2HCXH" \
+  --company "企业名称" \
+  --org-code "统一社会信用代码或组织机构代码" \
   --mode enhanced \
   --json
 ```

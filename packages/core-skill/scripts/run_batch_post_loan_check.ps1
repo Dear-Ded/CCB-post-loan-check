@@ -6,6 +6,7 @@ param(
   [string]$OutputRoot = "",
   [switch]$IncludeHealthCommission,
   [switch]$SmokeQuick,
+  [switch]$NonJudicial,
   [switch]$SkipSearch,
   [switch]$Headless,
   [switch]$RetryFailed,
@@ -120,7 +121,7 @@ function New-GapListMarkdown {
     $plan = $planItems | Where-Object { $_.company -eq $row.company } | Select-Object -First 1
     $action = if ($plan) { Format-GapAction $plan.action } else { "重试失败任务" }
     $lines.Add(("## {0}" -f $row.company))
-    if (-not [string]::IsNullOrWhiteSpace($row.orgCode)) { $lines.Add(("- 统一社会信用代码：{0}" -f $row.orgCode)) }
+    if (-not [string]::IsNullOrWhiteSpace($row.orgCode)) { $lines.Add(("- 统一社会信用代码或组织机构代码：{0}" -f $row.orgCode)) }
     $lines.Add(("- 建议动作：{0}" -f $action))
     if (-not [string]::IsNullOrWhiteSpace($row.error)) { $lines.Add(("- 最近错误：{0}" -f $row.error)) }
     if ($row.evidenceDir) { $lines.Add(("- 证据目录：{0}" -f $row.evidenceDir)) }
@@ -235,6 +236,7 @@ for ($i = 0; $i -lt $companies.Count; $i += 1) {
   if (-not [string]::IsNullOrWhiteSpace($code)) { $runnerParameters.OrgCode = $code }
   if ($IncludeHealthCommission) { $runnerParameters.IncludeHealthCommission = $true }
   if ($SmokeQuick) { $runnerParameters.SmokeQuick = $true }
+  if ($NonJudicial) { $runnerParameters.NonJudicial = $true }
   if ($SkipSearch) { $runnerParameters.SkipSearch = $true }
   if ($effectiveHeadless) { $runnerParameters.Headless = $true }
   if ($NoPrompt) { $runnerParameters.NoPrompt = $true }

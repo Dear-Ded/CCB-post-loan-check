@@ -50,7 +50,7 @@ Batch:
 Optional people:
 
 ```powershell
--Person "张三|身份证号" -Person "李四|身份证号"
+-Person "自然人A|身份证号" -Person "自然人B|身份证号"
 ```
 
 Optional hospital/medical portal:

@@ -13,6 +13,7 @@ JUDICIAL_MODE="assisted"
 MODE="${POST_LOAN_INVESTIGATION_MODE:-}"
 INCLUDE_HEALTH="0"
 SMOKE_QUICK="0"
+NON_JUDICIAL="1"
 NO_PROMPT="0"
 SKIP_SEARCH="0"
 JSON_OUTPUT="0"
@@ -29,6 +30,7 @@ while [[ $# -gt 0 ]]; do
     --mode) MODE="${2:-}"; shift 2 ;;
     --include-health-commission) INCLUDE_HEALTH="1"; shift ;;
     --smoke-quick) SMOKE_QUICK="1"; shift ;;
+    --non-judicial) NON_JUDICIAL="1"; shift ;;
     --no-prompt) NO_PROMPT="1"; shift ;;
     --skip-search) SKIP_SEARCH="1"; shift ;;
     --json) JSON_OUTPUT="1"; shift ;;
@@ -117,17 +119,18 @@ write_failure_summary() {
   local code="$3"
   local phase="$4"
   local reason="$5"
-  "$PYTHON_BIN" - "$run_dir" "$company" "$code" "$MODE" "$JUDICIAL_MODE" "$phase" "$reason" <<'PY'
+  "$PYTHON_BIN" - "$run_dir" "$company" "$code" "$MODE" "$JUDICIAL_MODE" "$NON_JUDICIAL" "$phase" "$reason" <<'PY'
 import json, os, sys
 from datetime import datetime, timezone
 
-run_dir, company, code, mode, judicial_mode, phase, reason = sys.argv[1:8]
+run_dir, company, code, mode, judicial_mode, non_judicial, phase, reason = sys.argv[1:9]
 payload = {
     "ok": False,
     "finalReportGenerated": False,
     "company": company,
     "orgCode": code,
     "mode": mode,
+    "nonJudicialMode": non_judicial == "1",
     "judicialMode": judicial_mode,
     "phase": phase,
     "reason": reason,
@@ -176,14 +179,14 @@ fi
 run_single() {
   local company="$1"
   local code="${2:-}"
-  local stamp run_dir manifest report args log_file report_name template_path
+  local stamp run_dir manifest report args log_file
   stamp="$(date +%Y%m%d-%H%M%S)"
   run_dir="$OUTPUT_ROOT/${company}-${stamp}"
   mkdir -p "$run_dir"
   log_file="$run_dir/run.log"
   printf 'runtime node=%s python=%s mode=%s\n' "$NODE_BIN" "$PYTHON_BIN" "${MODE:-settings}" >>"$log_file"
 
-  args=("$SCRIPT_DIR/capture_template_slots.js" "--company" "$company" "--out-dir" "$run_dir" "--judicial-mode" "$JUDICIAL_MODE" "--headless" "--no-prompt")
+  args=("$SCRIPT_DIR/capture_template_slots.js" "--company" "$company" "--out-dir" "$run_dir" "--judicial-mode" "blocked" "--headless" "--no-prompt" "--non-judicial")
   [[ -n "$MODE" ]] && args+=("--mode" "$MODE")
   [[ -n "$code" ]] && args+=("--org-code" "$code")
   [[ "$INCLUDE_HEALTH" == "1" ]] && args+=("--include-health-commission")
@@ -211,12 +214,8 @@ run_single() {
     return "$capture_status"
   fi
 
-  report_prefix=$'\u8d37\u540e\u67e5\u8be2'
-  report_name="${report_prefix}-${company}-$(date +%Y%m%d).docx"
-  template_name=$'\u8d37\u540e\u67e5\u8be2\u6a21\u677f.docx'
-  template_path="$CORE_DIR/assets/$template_name"
   set +e
-  timeout 60s "$PYTHON_BIN" "$SCRIPT_DIR/build_report.py" --manifest "$manifest" --template "$template_path" --out "$run_dir/$report_name" >>"$log_file" 2>&1
+  timeout 60s "$PYTHON_BIN" "$SCRIPT_DIR/build_report.py" --manifest "$manifest" >>"$log_file" 2>&1
   local build_status=$?
   set -e
   if [[ "$build_status" -ne 0 ]]; then
@@ -225,7 +224,13 @@ run_single() {
     echo "Report build failed for $company" >&2
     return "$build_status"
   fi
-  report="$(find "$run_dir" -maxdepth 1 -name '*.docx' -type f | sort | tail -n 1)"
+  report="$("$PYTHON_BIN" - "$run_dir" <<'PY'
+from pathlib import Path
+import sys
+items = sorted(Path(sys.argv[1]).glob("*.docx"), key=lambda p: p.stat().st_mtime)
+print(str(items[-1]) if items else "")
+PY
+)"
   if [[ -z "$report" ]]; then
     cat "$log_file" >&2 || true
     echo "Report not found for $company" >&2

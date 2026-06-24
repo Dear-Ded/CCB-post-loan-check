@@ -11,6 +11,7 @@ param(
   [string[]]$Person = @(),
   [switch]$IncludeHealthCommission,
   [switch]$SmokeQuick,
+  [switch]$NonJudicial,
   [switch]$SkipSearch,
 
 [ValidateSet("", "standard", "enhanced", "deep", "expert")]
@@ -200,26 +201,52 @@ function Stop-ProcessTreeBestEffort([int]$RootProcessId) {
   try { Stop-Process -Id $RootProcessId -Force -ErrorAction SilentlyContinue } catch {}
 }
 
-function Write-MinimalFailureSummary([string]$Reason, [string]$Phase) {
+function Get-RequiredEvidenceSummary([string]$ManifestPath) {
+  if ([string]::IsNullOrWhiteSpace($ManifestPath) -or -not (Test-Path -LiteralPath $ManifestPath)) {
+    return @()
+  }
+  try {
+    $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $ManifestPath | ConvertFrom-Json
+    if ($manifest.requiredEvidence -and -not $manifest.requiredEvidence.ok) {
+      return @($manifest.requiredEvidence.missingRequired | ForEach-Object {
+        [pscustomobject]@{
+          id = [string]$_.id
+          label = [string]$_.label
+          reason = [string]$_.missingReason
+        }
+      })
+    }
+  } catch {
+    return @([pscustomobject]@{
+      id = "manifest"
+      label = "manifest"
+      reason = "manifest_required_evidence_parse_failed"
+    })
+  }
+  return @()
+}
+
+function Format-RequiredEvidenceSummary([object[]]$MissingEvidence) {
+  if (-not $MissingEvidence -or $MissingEvidence.Count -eq 0) { return "" }
+  return @($MissingEvidence | ForEach-Object { "$($_.id):$($_.reason)" }) -join ", "
+}
+
+function Write-MinimalFailureSummary([string]$Reason, [string]$Phase, [string]$ManifestPath = "") {
   $modeInfo = Get-EffectiveModeInfo -RunDirectory $runDir
   $effectiveMode = $modeInfo.mode
   $settingsMode = $modeInfo.settingsMode
-  $missingEvidence = @()
-  if ($Phase -like "*portal_capture*" -and -not $SmokeQuick) {
+  $missingEvidence = @(Get-RequiredEvidenceSummary -ManifestPath $ManifestPath)
+  $manifestExists = -not [string]::IsNullOrWhiteSpace($ManifestPath) -and (Test-Path -LiteralPath $ManifestPath)
+  if ($missingEvidence.Count -eq 0 -and -not $manifestExists -and $Phase -like "*portal_capture*" -and -not $SmokeQuick) {
     $missingEvidence = @(
       [pscustomobject]@{ id = "judicial_wenshu"; label = "China Judgments Online"; reason = "official_judgment_result_not_confirmed_before_manifest" },
       [pscustomobject]@{ id = "judicial_enforcement"; label = "China Enforcement Information"; reason = "official_enforcement_result_not_confirmed_before_manifest" }
     )
   }
-  $evidenceSummary = if ($missingEvidence.Count -gt 0) {
-    @($missingEvidence | ForEach-Object { "$($_.id):$($_.reason)" }) -join ", "
-  } else {
-    ""
-  }
-  $effectiveReason = if (-not [string]::IsNullOrWhiteSpace($evidenceSummary)) {
-    "Required official evidence was not confirmed: $evidenceSummary"
-  } else {
-    $Reason
+  $evidenceSummary = Format-RequiredEvidenceSummary -MissingEvidence $missingEvidence
+  $effectiveReason = $Reason
+  if ($Phase -eq "report_build" -and -not [string]::IsNullOrWhiteSpace($evidenceSummary)) {
+    $effectiveReason = "Report build blocked by missing required evidence: $evidenceSummary"
   }
   $nextAction = if (-not [string]::IsNullOrWhiteSpace($evidenceSummary)) {
     "Required evidence is still missing: $evidenceSummary. Re-run the official source capture for those items, then rebuild the report."
@@ -274,7 +301,7 @@ function Write-MinimalFailureSummary([string]$Reason, [string]$Phase) {
   $jsonPath = Join-Path $runDir "failure-summary.json"
   $mdPath = Join-Path $runDir "failure-summary.md"
   $payload | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
-  @(
+  $md = @(
     "# Query Failure Diagnostics",
     "",
     "- Company: $CompanyName",
@@ -306,7 +333,7 @@ function Invoke-NodeWithOptionalTimeout {
   )
 
   if ($MaxCaptureSeconds -le 0) {
-    & $FilePath @Arguments
+    & $FilePath @Arguments | ForEach-Object { Write-Host $_ }
     return $LASTEXITCODE
   }
 
@@ -362,11 +389,16 @@ if ($effectiveTemplateSlots) {
   foreach ($p in $Person) { $captureArgs += @("--person", $p) }
   if ($IncludeHealthCommission) { $captureArgs += "--include-health-commission" }
   if ($SmokeQuick) { $captureArgs += "--smoke-quick" }
+  if ($NonJudicial) { $captureArgs += "--non-judicial" }
   if ($SkipSearch) { $captureArgs += "--skip-search" }
   if (-not [string]::IsNullOrWhiteSpace($Mode)) { $captureArgs += @("--mode", $Mode) }
   if ($effectiveHeadless) { $captureArgs += "--headless" }
   if ($NoPrompt) { $captureArgs += "--no-prompt" }
-  if (-not [string]::IsNullOrWhiteSpace($JudicialMode)) { $captureArgs += @("--judicial-mode", $JudicialMode) }
+  if ($NonJudicial) {
+    $captureArgs += @("--judicial-mode", "blocked")
+  } elseif (-not [string]::IsNullOrWhiteSpace($JudicialMode)) {
+    $captureArgs += @("--judicial-mode", $JudicialMode)
+  }
   Write-Stage "starting portal capture"
   $global:LASTEXITCODE = Invoke-NodeWithOptionalTimeout -FilePath $NodeExe -Arguments $captureArgs -TimeoutPhase "portal_capture_timeout"
 } else {
@@ -388,7 +420,7 @@ $manifestName = if ($effectiveTemplateSlots) { "template-slots-manifest.json" } 
 $manifestPath = Join-Path $runDir $manifestName
 if (-not (Test-Path -LiteralPath $manifestPath)) {
   $reason = "Portal capture did not create $manifestName"
-  Write-MinimalFailureSummary -Reason $reason -Phase "portal_capture_manifest"
+  Write-MinimalFailureSummary -Reason $reason -Phase "portal_capture_manifest" -ManifestPath $manifestPath
   throw $reason
 }
 if ($effectiveTemplateSlots -and (Test-Path -LiteralPath $manifestPath)) {
@@ -415,7 +447,7 @@ Write-Stage "starting report build"
 & $PythonExe @buildArgs
 if ($LASTEXITCODE -ne 0) {
   $reason = "Report build failed with exit code $LASTEXITCODE"
-  Write-MinimalFailureSummary -Reason $reason -Phase "report_build"
+  Write-MinimalFailureSummary -Reason $reason -Phase "report_build" -ManifestPath $manifestPath
   throw $reason
 }
 
